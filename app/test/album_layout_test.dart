@@ -5,7 +5,6 @@ import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
-import 'package:khinsider/ui/shared/player_bar.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 /// No-op player double so PlayerBar can render without platform audio.
@@ -115,16 +114,9 @@ void main() {
         reason: 'size $size: favorite button missing',
       );
 
-      // …and sit entirely above the player bar (not clipped / covered).
+      // …and sit fully on screen (nothing covers it now that the
+      // bottom player bar is gone).
       final buttonRect = tester.getRect(buttonFinder);
-      final barRect = tester.getRect(find.byType(PlayerBar));
-      expect(
-        buttonRect.bottom,
-        lessThanOrEqualTo(barRect.top + 0.5),
-        reason:
-            'size $size: favorite button ($buttonRect) extends into '
-            'the player bar (top ${barRect.top})',
-      );
       expect(buttonRect.bottom, lessThanOrEqualTo(size.height));
       expect(tester.takeException(), isNull);
 

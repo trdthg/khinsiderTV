@@ -11,7 +11,6 @@ import '../../state/album_controller.dart';
 import '../../state/player_controller.dart';
 import '../../state/ui_state.dart';
 import 'album_metadata.dart';
-import '../shared/player_bar.dart';
 import 'related_albums.dart';
 
 /// Album detail screen: cover + full track list.
@@ -37,7 +36,6 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen> {
     );
 
     return Scaffold(
-      bottomNavigationBar: const PlayerBar(),
       appBar: AppBar(
         title: const Text('Album'),
         actions: [

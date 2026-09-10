@@ -6,7 +6,6 @@ import 'package:khinsider_api/khinsider_api.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/search_controller.dart';
-import '../shared/player_bar.dart';
 
 /// Search screen: text field + responsive album grid (list on narrow /
 /// portrait layouts, grid on TV / landscape).
@@ -37,7 +36,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final state = ref.watch(searchControllerProvider);
 
     return Scaffold(
-      bottomNavigationBar: const PlayerBar(),
       body: SafeArea(
         child: Column(
           children: [
