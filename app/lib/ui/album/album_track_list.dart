@@ -40,8 +40,7 @@ class AlbumTrackList extends ConsumerWidget {
       bindings: {
         // The cover sits left of the list but may not vertically overlap a
         // given row, so Left is bound explicitly as the menu entry point.
-        if (onLeftArrow != null)
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): onLeftArrow!,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): ?onLeftArrow,
       },
       child: Material(
         type: MaterialType.transparency,
