@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
@@ -106,8 +107,8 @@ class _AlbumBody extends ConsumerWidget {
                               child: SizedBox(
                                 width: coverSize,
                                 height: coverSize,
-                                child: Image.network(
-                                  album.coverUrl!,
+                                child: CachedNetworkImage(
+                                  imageUrl: album.coverUrl!,
                                   fit: BoxFit.cover,
                                 ),
                               ),

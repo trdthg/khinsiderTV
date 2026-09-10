@@ -1,10 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets/dpad_tile.dart';
 import '../../state/player_controller.dart';
 import '../../state/ui_state.dart';
-import '../../core/widgets/seek_bar.dart';
 
 /// Persistent bottom player bar. Visible on every screen; all controls are
 /// D-Pad focusable.
@@ -20,9 +20,6 @@ class PlayerBar extends ConsumerWidget {
     final entry = player.current;
 
     if (entry == null) return const SizedBox.shrink();
-
-    final duration = player.duration ?? Duration.zero;
-    final position = player.position;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -46,8 +43,8 @@ class PlayerBar extends ConsumerWidget {
                       width: 48,
                       height: 48,
                       child: entry.album.coverUrl != null
-                          ? Image.network(
-                              entry.album.coverUrl!,
+                          ? CachedNetworkImage(
+                              imageUrl: entry.album.coverUrl!,
                               fit: BoxFit.cover,
                             )
                           : const Icon(Icons.album),
@@ -65,26 +62,11 @@ class PlayerBar extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        Row(
-                          children: [
-                            Text(
-                              _fmt(position),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            Expanded(
-                              child: SeekBar(
-                                position: position,
-                                duration: duration,
-                                onSeek: (v) => ref
-                                    .read(playerControllerProvider.notifier)
-                                    .seek(Duration(milliseconds: v.round())),
-                              ),
-                            ),
-                            Text(
-                              _fmt(duration),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
+                        Text(
+                          entry.album.summary.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
@@ -128,12 +110,6 @@ class PlayerBar extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  static String _fmt(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
   }
 }
 

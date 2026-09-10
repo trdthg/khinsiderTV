@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
@@ -212,8 +213,8 @@ class _AlbumRow extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: albums[i].thumbUrl != null
-                            ? Image.network(
-                                albums[i].thumbUrl!,
+                            ? CachedNetworkImage(
+                                imageUrl: albums[i].thumbUrl!,
                                 fit: BoxFit.cover,
                               )
                             : const Icon(Icons.album, size: 48),
@@ -298,11 +299,9 @@ class _AlbumCard extends ConsumerWidget {
           children: [
             Expanded(
               child: album.thumbUrl != null
-                  ? Image.network(
-                      album.thumbUrl!,
+                  ? CachedNetworkImage(
+                      imageUrl: album.thumbUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.album, size: 56),
                     )
                   : const Icon(Icons.album, size: 56),
             ),

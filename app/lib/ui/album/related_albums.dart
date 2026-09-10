@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
@@ -52,11 +53,9 @@ class RelatedAlbumsRow extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: album.thumbUrl != null
-                              ? Image.network(
-                                  album.thumbUrl!,
+                              ? CachedNetworkImage(
+                                  imageUrl: album.thumbUrl!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
-                                      const Icon(Icons.album, size: 40),
                                 )
                               : const Icon(Icons.album, size: 40),
                         ),

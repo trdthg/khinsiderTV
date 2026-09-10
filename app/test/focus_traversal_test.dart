@@ -15,8 +15,8 @@ import 'album_layout_test.dart'
 /// Guards the TV navigation contract:
 ///  * Arrow keys must be able to travel from the content area into the
 ///    persistent player bar (no FocusTraversalGroup walls).
-///  * The seek bar must be reachable, and while focused ArrowLeft/Right must
-///    be consumed as seek commands (focus stays), ArrowUp/Down must leave.
+///  * The seek bar lives in the OSD menu; its focus trap is covered by the
+///    now_playing tests.
 void main() {
   testWidgets('arrows reach the player bar and the seek bar is usable', (
     tester,
@@ -76,42 +76,14 @@ void main() {
     }
     expect(reachedBar, isTrue, reason: 'arrows never reached the player bar');
 
-    // 2. From the bar, reach the seek bar with at most a few arrows.
-    var seekFocused = false;
-    for (final key in [
-      LogicalKeyboardKey.arrowLeft,
-      LogicalKeyboardKey.arrowUp,
-      LogicalKeyboardKey.arrowLeft,
-      LogicalKeyboardKey.arrowUp,
-    ]) {
-      if (FocusManager.instance.primaryFocus?.debugLabel == 'seek-bar-focus') {
-        seekFocused = true;
-        break;
-      }
-      await tester.sendKeyEvent(key);
-      await tester.pump();
-    }
-    seekFocused =
-        seekFocused ||
-        FocusManager.instance.primaryFocus?.debugLabel == 'seek-bar-focus';
-    expect(seekFocused, isTrue, reason: 'seek bar not reachable by arrows');
-
-    // 3. While focused on the seek bar: Left/Right are consumed (seek, focus
-    // stays put); Up leaves the bar.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      'seek-bar-focus',
-      reason: 'ArrowRight should seek, not move focus',
-    );
-
+    // 2. From the bar, arrows must walk BACK into the track list
+    // (the seek bar now lives in the OSD menu, covered by now_playing tests).
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
     expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      isNot('seek-bar-focus'),
-      reason: 'ArrowUp should leave the seek bar',
+      insidePlayerBar(FocusManager.instance.primaryFocus),
+      isFalse,
+      reason: 'ArrowUp should leave the player bar back into the list',
     );
 
     tester.view.resetPhysicalSize();
