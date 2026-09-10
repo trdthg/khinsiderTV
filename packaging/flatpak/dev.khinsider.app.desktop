@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -8,6 +7,6 @@ Comment=Stream and cache game soundtracks from KHInsider
 Exec=khinsider
 Icon=dev.khinsider.app
 Terminal=false
-Categories=Audio;Music;Player;
+Categories=AudioVideo;Audio;Music;Player;
 Keywords=soundtrack;game;music;player;khinsider;
 StartupWMClass=khinsider
