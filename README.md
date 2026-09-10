@@ -51,6 +51,19 @@ Flutter/native dependencies:
   variant (`/game-soundtrack/album/…`) is blocked by Cloudflare WAF (403).
 * Requests must send a browser-like `User-Agent` and `Accept` headers.
 
+## 发版（release 脚本）
+
+```bash
+./scripts/release.sh patch          # 0.1.3 -> 0.1.4：改 pubspec、commit、打 tag、推送（触发 CI 发版）
+./scripts/release.sh minor          # 0.1.3 -> 0.2.0
+./scripts/release.sh major          # 0.1.3 -> 1.0.0
+./scripts/release.sh repin          # 把最新 tag 重新指到当前 commit 并重建 GitHub Release（CI 失败修复后用）
+./scripts/release.sh repin v0.1.3   # 重指指定 tag
+./scripts/release.sh patch --dry-run
+```
+
+`repin` 会先删除该 tag 对应的 GitHub Release（旧产物一并清掉），CI 重跑后自动重建。
+
 ## CI / Build matrix
 
 `.github/workflows/ci.yml` builds and releases on every `v*` tag
