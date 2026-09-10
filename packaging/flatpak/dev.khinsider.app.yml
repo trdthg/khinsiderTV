@@ -5,7 +5,7 @@
 # the freedesktop runtime — which is what the Steam Deck ships.
 app-id: dev.khinsider.app
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: khinsider
 
@@ -23,8 +23,8 @@ modules:
   - name: khinsider
     buildsystem: simple
     build-commands:
-      # bundle comes prebuilt from CI (artifact downloaded next to it)
-      - cp -r linux-bundle /app/khinsider
+      # bundle comes prebuilt from CI (copied into this source dir)
+      - cp -r packaging/flatpak/linux-bundle /app/khinsider
       - chmod +x /app/khinsider/khinsider
       - mkdir -p /app/bin
       - |
