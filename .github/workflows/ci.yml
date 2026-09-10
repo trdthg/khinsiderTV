@@ -196,6 +196,10 @@ jobs:
         with:
           name: linux-bundle
           path: packaging/flatpak/linux-bundle
+      - name: Track downloaded bundle (flatpak-builder dir sources only copy
+          git-tracked files)
+        run: |
+          git add -f packaging/flatpak/linux-bundle
       - name: Stamp version into metainfo
         run: |
           sed -i "s/@VERSION@/${{ needs.version.outputs.version }}/g" \
