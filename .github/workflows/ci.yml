@@ -108,16 +108,12 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - name: Build (no codesign — ad-hoc signed below)
+      - name: Build
         working-directory: app
         run: |
           flutter pub get
-          flutter build macos --release --no-codesign \
+          flutter build macos --release \
             --build-name=${{ needs.version.outputs.version }}
-      - name: Ad-hoc codesign (entitlements embedded, Gatekeeper bypass needed)
-        run: |
-          codesign --force --deep --sign - \
-            "app/build/macos/Build/Products/Release/khinsider.app"
       - name: Zip app bundle
         run: |
           mkdir -p dist
@@ -192,6 +188,9 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-23.08
       options: --privileged
     steps:
+      - name: Fix container prerequisites (machine-id for flatpak-builder)
+        run: |
+          echo "machine-id-khinsider" > /etc/machine-id
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
@@ -208,6 +207,7 @@ jobs:
           flatpak remote-add --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak-builder --repo=repo --force-clean \
+            --disable-rofiles-fuse \
             --install-deps-from=flathub \
             build-dir packaging/flatpak/dev.khinsider.app.yml
       - name: Build single-file bundle
