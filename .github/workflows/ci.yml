@@ -185,38 +185,60 @@ jobs:
     needs: [build-linux, version]
     runs-on: ubuntu-latest
     container:
+      # Provides the flatpak CLI toolchain (build-init/finish/export/bundle).
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-23.08
       options: --privileged
     steps:
-      - name: Fix container prerequisites (machine-id for flatpak-builder)
+      - name: Container prerequisites (machine-id)
         run: |
           echo "machine-id-khinsider" > /etc/machine-id
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: linux-bundle
-          path: packaging/flatpak/linux-bundle
-      - name: Track downloaded bundle (flatpak-builder dir sources only copy
-          git-tracked files)
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git add -f packaging/flatpak/linux-bundle
+          path: linux-bundle
       - name: Stamp version into metainfo
         run: |
           sed -i "s/@VERSION@/${{ needs.version.outputs.version }}/g" \
             packaging/flatpak/dev.khinsider.app.metainfo.xml
           sed -i "s/@DATE@/$(date +%Y-%m-%d)/g" \
             packaging/flatpak/dev.khinsider.app.metainfo.xml
-      - name: Build flatpak
+      - name: Install runtime + SDK
         run: |
           flatpak remote-add --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak-builder --repo=repo --force-clean \
-            --disable-rofiles-fuse \
-            --install-deps-from=flathub \
-            build-dir packaging/flatpak/dev.khinsider.app.yml
-      - name: Build single-file bundle
+          flatpak install -y --system flathub \
+            org.freedesktop.Platform/x86_64/24.08 \
+            org.freedesktop.Sdk/x86_64/24.08
+      - name: Assemble app dir (prebuilt bundle, no sandbox build)
         run: |
+          flatpak build-init appdir dev.khinsider.app \
+            org.freedesktop.Sdk org.freedesktop.Platform 24.08
+          mkdir -p appdir/files/bin \
+            appdir/files/share/applications \
+            appdir/files/share/metainfo \
+            appdir/files/share/icons/hicolor/128x128/apps
+          cp -r linux-bundle appdir/files/khinsider
+          chmod +x appdir/files/khinsider/khinsider
+          printf '#!/bin/sh\ncd /app/khinsider && exec ./khinsider "$@"\n' \
+            > appdir/files/bin/khinsider
+          chmod +x appdir/files/bin/khinsider
+          cp packaging/flatpak/dev.khinsider.app.desktop \
+            appdir/files/share/applications/dev.khinsider.app.desktop
+          cp packaging/flatpak/dev.khinsider.app.metainfo.xml \
+            appdir/files/share/metainfo/dev.khinsider.app.metainfo.xml
+          cp packaging/flatpak/icons/hicolor/128x128/apps/dev.khinsider.app.png \
+            appdir/files/share/icons/hicolor/128x128/apps/dev.khinsider.app.png
+      - name: Finish (permissions + metadata)
+        run: |
+          flatpak build-finish appdir \
+            --command=khinsider \
+            --share=ipc --share=network \
+            --socket=x11 --socket=wayland --socket=pulseaudio \
+            --device=dri
+      - name: Export repo + build single-file bundle
+        run: |
+          flatpak build-export repo appdir
           flatpak build-bundle repo \
             khinsider-${{ needs.version.outputs.version }}-steamdeck.flatpak \
             dev.khinsider.app
