@@ -9,16 +9,20 @@ class NowPlayingArt extends StatelessWidget {
     required this.coverUrl,
     required this.spin,
     required this.glow,
+    this.size = 300.0,
   });
 
   final String? coverUrl;
   final AnimationController spin;
   final double glow;
 
+  /// Side length of the square cover (vinyl scales relative to it).
+  final double size;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    const coverSize = 300.0;
+    final coverSize = size;
 
     return SizedBox(
       width: coverSize * 1.55,

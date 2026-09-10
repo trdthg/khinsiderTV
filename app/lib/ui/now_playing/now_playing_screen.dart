@@ -176,12 +176,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               canRequestFocus: false,
               descendantsAreFocusable: !_menuOpen,
               child: SafeArea(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ------- left: animated album art -------
-                    Expanded(
-                      flex: 5,
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    // Wide: art left / list right, each ~half the width.
+                    // Narrow (phone portrait): art on top, list below.
+                    final narrow = c.maxWidth < 720;
+                    final artPane = SizedBox(
+                      width: narrow ? double.infinity : c.maxWidth * 0.5,
+                      height: narrow ? c.maxHeight * 0.42 : double.infinity,
                       child: Center(
                         child: CallbackShortcuts(
                           bindings: {
@@ -201,6 +203,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                               ]),
                               builder: (context, _) {
                                 final t = _floatCtrl.value * 2 * math.pi;
+                                final artSize = narrow
+                                    ? (c.maxWidth * 0.6).clamp(140.0, 260.0)
+                                    : (c.maxWidth * 0.5 * 0.62).clamp(
+                                        160.0,
+                                        300.0,
+                                      );
                                 return Transform.translate(
                                   offset: Offset(0, math.sin(t) * 7),
                                   child: Transform.scale(
@@ -210,6 +218,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                       coverUrl: album.coverUrl,
                                       spin: _spinCtrl,
                                       glow: _glowCtrl.value,
+                                      size: artSize,
                                     ),
                                   ),
                                 );
@@ -218,17 +227,37 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                           ),
                         ),
                       ),
-                    ),
-                    // ------- right: track list -------
-                    Expanded(
-                      flex: 7,
-                      child: NowPlayingTrackList(
-                        album: album,
-                        focusNodes: _rowFocusNodes,
-                        coverFocusNode: _coverFocus,
+                    );
+                    final listPane = Padding(
+                      padding: EdgeInsets.only(right: narrow ? 16 : 32),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: c.maxHeight * 0.8,
+                          ),
+                          child: NowPlayingTrackList(
+                            album: album,
+                            focusNodes: _rowFocusNodes,
+                            coverFocusNode: _coverFocus,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    );
+                    return narrow
+                        ? Column(
+                            children: [
+                              artPane,
+                              Expanded(child: listPane),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: artPane),
+                              Expanded(child: listPane),
+                            ],
+                          );
+                  },
                 ),
               ),
             ),

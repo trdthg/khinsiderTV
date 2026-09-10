@@ -4,6 +4,7 @@ import 'package:khinsider_api/khinsider_api.dart';
 
 import 'core/keyboard/global_media_keys.dart';
 import 'core/theme.dart';
+import 'ui/shared/update_banner.dart';
 import 'state/theme_controller.dart';
 import 'ui/album/album_screen.dart';
 import 'ui/now_playing/now_playing_screen.dart';
@@ -54,8 +55,14 @@ class KhinsiderApp extends ConsumerWidget {
         }
         return MaterialPageRoute<void>(builder: (_) => const SearchScreen());
       },
-      builder: (context, child) =>
-          GlobalMediaKeys(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => GlobalMediaKeys(
+        child: Column(
+          children: [
+            const UpdateBanner(),
+            Expanded(child: child ?? const SizedBox.shrink()),
+          ],
+        ),
+      ),
     );
   }
 }
