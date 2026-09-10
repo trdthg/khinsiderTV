@@ -125,6 +125,35 @@ jobs:
           name: macos-app
           path: dist/
 
+  # ----------------------------------------------------------------- ios ----
+  # Unsigned IPA — install via AltStore / Sideloadly / TrollStore, or open
+  # in Xcode for device signing. (CI has no Apple signing identity.)
+  build-ios:
+    needs: [test, version]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build (unsigned)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign \
+            --build-name=${{ needs.version.outputs.version }}
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist Payload
+          cp -R app/build/ios/iphoneos/Runner.app Payload/Runner.app
+          zip -qr dist/khinsider-${{ needs.version.outputs.version }}-ios-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/
+
   # ------------------------------------------------------------ windows ----
   build-windows:
     needs: [test, version]
@@ -250,7 +279,7 @@ jobs:
   # ------------------------------------------------------------- release --
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-android, build-macos, build-windows, flatpak-steamdeck]
+    needs: [build-android, build-ios, build-macos, build-windows, flatpak-steamdeck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -275,6 +304,10 @@ jobs:
 
             **Windows** — unzip and run `khinsider.exe` (SmartScreen warning is
             expected for unsigned builds).
+
+            **iOS** — the IPA is unsigned: sideload with AltStore / Sideloadly /
+            TrollStore (7-day free signing with a personal Apple ID, or use a
+            paid developer account for longer).
 
             **Steam Deck / Linux** — desktop mode, then:
             `flatpak install --user ./khinsider-*.flatpak`
