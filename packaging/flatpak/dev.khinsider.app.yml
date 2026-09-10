@@ -1,0 +1,47 @@
+# Flatpak manifest for the Steam Deck / Linux build.
+#
+# The Flutter Linux bundle is built OUTSIDE the sandbox on a GitHub Actions
+# Ubuntu runner (fast, well-cached) and this manifest only packages it into
+# the freedesktop runtime — which is what the Steam Deck ships.
+app-id: dev.khinsider.app
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: khinsider
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --share=network          # KHInsider API + audio CDN streaming
+  - --socket=pulseaudio      # audio output (PipeWire-compatible on Deck)
+  # App data (audio cache / preferences) lands in
+  # ~/.var/app/dev.khinsider.app/ — writable by default, no extra perms.
+
+modules:
+  - name: khinsider
+    buildsystem: simple
+    build-commands:
+      # bundle comes prebuilt from CI (artifact downloaded next to it)
+      - cp -r linux-bundle /app/khinsider
+      - chmod +x /app/khinsider/khinsider
+      - mkdir -p /app/bin
+      - |
+        cat > /app/bin/khinsider <<'EOT'
+        #!/bin/sh
+        # Wrapper: keeps the executable's working dir correct so it finds
+        # its data/ and lib/ directories (relative lookup).
+        cd /app/khinsider && exec ./khinsider "$@"
+        EOT
+        chmod +x /app/bin/khinsider
+      - install -Dm644 packaging/flatpak/dev.khinsider.app.desktop
+        /app/share/applications/dev.khinsider.app.desktop
+      - install -Dm644 packaging/flatpak/dev.khinsider.app.metainfo.xml
+        /app/share/metainfo/dev.khinsider.app.metainfo.xml
+      - install -Dm644
+        packaging/flatpak/icons/hicolor/128x128/apps/dev.khinsider.app.png
+        /app/share/icons/hicolor/128x128/apps/dev.khinsider.app.png
+    sources:
+      - type: dir
+        path: .

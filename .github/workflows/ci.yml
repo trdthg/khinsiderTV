@@ -1,0 +1,254 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.44.9'
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------- tests ----
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: API package tests
+        working-directory: packages/khinsider_api
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: App analyze + tests
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  # ------------------------------------------------------------ version ----
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Compute version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ------------------------------------------------------------ android ----
+  # Android APK incl. ARMv7 for old TV boxes / Google TV.
+  build-android:
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build fat APK (armv7 + arm64)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build apk --release \
+            --target-platform android-arm,android-arm64 \
+            --build-name=${{ needs.version.outputs.version }} \
+            --build-number=${{ github.run_number }}
+      - name: Build split APKs (smaller downloads)
+        working-directory: app
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name=${{ needs.version.outputs.version }} \
+            --build-number=${{ github.run_number }}
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          cp app/build/app/outputs/flutter-apk/app-release.apk \
+             dist/khinsider-${{ needs.version.outputs.version }}-universal.apk
+          cp app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+             dist/khinsider-${{ needs.version.outputs.version }}-armv7.apk
+          cp app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+             dist/khinsider-${{ needs.version.outputs.version }}-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/
+
+  # -------------------------------------------------------------- macos ----
+  build-macos:
+    needs: [test, version]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build (no codesign — ad-hoc signed below)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build macos --release --no-codesign \
+            --build-name=${{ needs.version.outputs.version }}
+      - name: Ad-hoc codesign (entitlements embedded, Gatekeeper bypass needed)
+        run: |
+          codesign --force --deep --sign - \
+            "app/build/macos/Build/Products/Release/khinsider.app"
+      - name: Zip app bundle
+        run: |
+          mkdir -p dist
+          cd app/build/macos/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent khinsider.app \
+            "$GITHUB_WORKSPACE/dist/khinsider-${{ needs.version.outputs.version }}-macos.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/
+
+  # ------------------------------------------------------------ windows ----
+  build-windows:
+    needs: [test, version]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build
+        working-directory: app
+        shell: bash
+        run: |
+          flutter pub get
+          flutter build windows --release \
+            --build-name=${{ needs.version.outputs.version }}
+      - name: Zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "app/build/windows/x64/runner/Release/*" `
+            -DestinationPath "dist/khinsider-${{ needs.version.outputs.version }}-windows.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/
+
+  # ------------------------------------------------------ linux (flatpak) --
+  build-linux:
+    needs: [test, version]
+    runs-on: ubuntu-22.04   # older glibc = compatible with the Deck runtime
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build linux --release \
+            --build-name=${{ needs.version.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bundle
+          path: app/build/linux/x64/release/bundle/
+
+  flatpak-steamdeck:
+    needs: [build-linux, version]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-23.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-bundle
+          path: linux-bundle
+      - name: Stamp version into metainfo
+        run: |
+          sed -i "s/@VERSION@/${{ needs.version.outputs.version }}/g" \
+            packaging/flatpak/dev.khinsider.app.metainfo.xml
+          sed -i "s/@DATE@/$(date +%Y-%m-%d)/g" \
+            packaging/flatpak/dev.khinsider.app.metainfo.xml
+      - name: Build flatpak
+        run: |
+          flatpak remote-add --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --repo=repo --force-clean \
+            --install-deps-from=flathub \
+            build-dir packaging/flatpak/dev.khinsider.app.yml
+      - name: Build single-file bundle
+        run: |
+          flatpak build-bundle repo \
+            khinsider-${{ needs.version.outputs.version }}-steamdeck.flatpak \
+            dev.khinsider.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-steamdeck
+          path: khinsider-*.flatpak
+
+  # ------------------------------------------------------------- release --
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-android, build-macos, build-windows, flatpak-steamdeck]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -la dist/
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Install notes
+
+            **Android / TV box / Google TV** — sideload the APK:
+            `armv7` for old boxes, `arm64` for modern ones, `universal` if unsure.
+
+            **macOS** — unzip and run; unsigned build, so first launch needs:
+            `xattr -cr khinsider.app`
+
+            **Windows** — unzip and run `khinsider.exe` (SmartScreen warning is
+            expected for unsigned builds).
+
+            **Steam Deck / Linux** — desktop mode, then:
+            `flatpak install --user ./khinsider-*.flatpak`
+            (also add it to Steam via "Add a Non-Steam Game" for Gaming Mode)

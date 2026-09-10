@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.khinsider.app</id>
+  <name>KHInsider</name>
+  <summary>Game soundtrack streaming client</summary>
+  <developer_name>khinsider</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-Proprietary</project_license>
+  <launchable type="desktop-id">dev.khinsider.app.desktop</launchable>
+
+  <description>
+    <p>
+      A lightweight client for browsing and streaming game soundtracks from
+      KHInsider, designed for TV remote / gamepad navigation with two-phase
+      lazy loading and disk caching (pages + audio stream-while-playing).
+    </p>
+  </description>
+
+  <categories>
+    <category>Audio</category>
+    <category>Music</category>
+  </categories>
+
+  <provides>
+    <binary>khinsider</binary>
+  </provides>
+
+  <launchable type="desktop-id">dev.khinsider.app.desktop</launchable>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="@VERSION@" date="@DATE@">
+      <description>
+        <p>See the GitHub release notes.</p>
+      </description>
+    </release>
+  </releases>
+</component>

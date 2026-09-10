@@ -1,0 +1,12 @@
+# Melos-style workspace ignores
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/pubspec.lock
+.DS_Store
+*.iml
+.idea/
