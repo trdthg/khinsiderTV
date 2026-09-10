@@ -199,6 +199,7 @@ jobs:
       - name: Track downloaded bundle (flatpak-builder dir sources only copy
           git-tracked files)
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git add -f packaging/flatpak/linux-bundle
       - name: Stamp version into metainfo
         run: |
