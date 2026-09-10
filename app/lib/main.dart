@@ -1,10 +1,13 @@
-import 'package:audio_service/audio_service.dart';
+import 'dart:io' as dart_io;
+import 'package:audio_service/audio_service.dart'; // supported: android/ios/macos/web
 import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'audio/base_audio_player.dart';
+import 'audio/just_audio_player_impl.dart';
 import 'audio/audio_service_handler.dart';
 import 'state/player_controller.dart';
 
@@ -18,22 +21,34 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   // Media session (macOS Now-Playing / media keys, Android notification &
-  // lock-screen controls). The handler implements BaseAudioPlayer, so the
-  // rest of the app is unchanged; on platforms where audio_service is not
-  // wanted, the default audioPlayerProvider (JustAudioPlayerImpl) applies.
-  final audioHandler = await AudioService.init(
-    builder: () => KhinsiderAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'dev.khinsider.app.playback',
-      androidNotificationChannelName: 'KHInsider playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  // lock-screen controls). audio_service only ships platform channels for
+  // android/ios/macos/web — on Windows/Linux `AudioService.init` NEVER
+  // completes (no window would ever appear!), so those platforms run with
+  // the default audioPlayerProvider (JustAudioPlayerImpl) instead.
+  final BaseAudioPlayer player;
+  if (dart_io.Platform.isAndroid ||
+      dart_io.Platform.isIOS ||
+      dart_io.Platform.isMacOS) {
+    // Media session: Now-Playing / media keys / notification controls.
+    final handler = await AudioService.init<KhinsiderAudioHandler>(
+      builder: KhinsiderAudioHandler.new,
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'dev.khinsider.app.playback',
+        androidNotificationChannelName: 'KHInsider playback',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+      ),
+    );
+    player = handler;
+  } else {
+    // Windows/Linux: audio_service has no platform channels here — run the
+    // plain player (playback still works, just no system media integration).
+    player = JustAudioPlayerImpl();
+  }
 
   runApp(
     ProviderScope(
-      overrides: [audioPlayerProvider.overrideWithValue(audioHandler)],
+      overrides: [audioPlayerProvider.overrideWithValue(player)],
       child: const KhinsiderApp(),
     ),
   );
