@@ -47,11 +47,10 @@ void main() {
     // 6. Immersive fullscreen Now Playing takes over.
     await _waitFor(
       tester,
-      find.byKey(const ValueKey('now-playing')),
+      find.byKey(const ValueKey('zen-now-playing')),
       timeout: const Duration(seconds: 30),
     );
-    // The bottom player bar must be hidden while fullscreen.
-    // (No pumpAndSettle here: the cover animations loop forever.)
+    // Minimal immersive UI: no transport icons outside the OSD menu.
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }

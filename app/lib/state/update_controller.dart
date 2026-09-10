@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/update_service.dart';
 
@@ -38,13 +40,64 @@ class UpdateController extends Notifier<UpdateState> {
   }
 
   void dismiss() => state = state.copyWith(dismissed: true);
+
+  /// Auto-download the platform asset; then the banner offers to reveal it.
+  Future<void> download() async {
+    final info = state.available;
+    if (info == null ||
+        state.downloadPhase == UpdateDownloadPhase.downloading) {
+      return;
+    }
+    final service = ref.read(updateServiceProvider);
+    final asset = service.assetForPlatform(info.assets);
+    if (asset == null) return; // mobile: banner keeps the View link
+
+    state = state.copyWith(
+      downloadPhase: UpdateDownloadPhase.downloading,
+      downloadProgress: 0,
+    );
+    try {
+      final base = await getApplicationSupportDirectory();
+      final saveDir = Directory('${base.path}${Platform.pathSeparator}updates');
+      await saveDir.create(recursive: true);
+      final file = await service.downloadAsset(
+        asset,
+        saveDir: saveDir,
+        onProgress: (p) {
+          if (ref.mounted) {
+            state = state.copyWith(downloadProgress: p.clamp(0.0, 1.0));
+          }
+        },
+      );
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        downloadPhase: UpdateDownloadPhase.downloaded,
+        downloadedFile: file.path,
+      );
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = state.copyWith(downloadPhase: UpdateDownloadPhase.failed);
+    }
+  }
+
+  /// Reveal the downloaded file in the platform file manager.
+  Future<void> revealDownload() async {
+    final path = state.downloadedFile;
+    if (path == null) return;
+    await ref.read(updateServiceProvider).revealInFileManager(path);
+  }
 }
+
+enum UpdateDownloadPhase { idle, downloading, downloaded, failed }
 
 class UpdateState {
   const UpdateState({
     this.available,
     this.checking = false,
     this.dismissed = false,
+    this.downloadPhase = UpdateDownloadPhase.idle,
+    this.downloadProgress = 0,
+    this.downloadedFile,
   });
 
   /// Non-null when a newer release exists.
@@ -52,16 +105,26 @@ class UpdateState {
   final bool checking;
   final bool dismissed;
 
+  final UpdateDownloadPhase downloadPhase;
+  final double downloadProgress;
+  final String? downloadedFile;
+
   bool get showBanner => available != null && !dismissed;
 
   UpdateState copyWith({
     UpdateInfo? available,
     bool? checking,
     bool? dismissed,
+    UpdateDownloadPhase? downloadPhase,
+    double? downloadProgress,
+    String? downloadedFile,
   }) => UpdateState(
     available: available ?? this.available,
     checking: checking ?? this.checking,
     dismissed: dismissed ?? this.dismissed,
+    downloadPhase: downloadPhase ?? this.downloadPhase,
+    downloadProgress: downloadProgress ?? this.downloadProgress,
+    downloadedFile: downloadedFile ?? this.downloadedFile,
   );
 }
 

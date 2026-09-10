@@ -8,7 +8,7 @@ import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
-import 'package:khinsider/ui/now_playing/now_playing_screen.dart';
+import 'package:khinsider/ui/now_playing/zen_view.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart' show FakeAudioPlayer, longTitleAlbum;
@@ -91,9 +91,11 @@ void main() {
             if (settings.name == '/now-playing') {
               final (album, trackIndex) = settings.arguments as (Album, int);
               return MaterialPageRoute<void>(
-                builder: (_) => NowPlayingScreen(
+                builder: (_) => ZenNowPlaying(
                   album: album,
+                  active: true,
                   initialTrackIndex: trackIndex,
+                  onExitZen: () {},
                 ),
               );
             }
@@ -121,9 +123,9 @@ void main() {
 
     // 2. The Now Playing screen pushed; the current-row highlight must map
     // to album index 4 (track 5), NOT the impl queue index 0.
-    expect(find.byType(NowPlayingScreen), findsOneWidget);
+    expect(find.byType(ZenNowPlaying), findsOneWidget);
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(NowPlayingScreen)),
+      tester.element(find.byType(ZenNowPlaying)),
     );
     expect(
       container.read(playerControllerProvider).currentIndex,
@@ -133,17 +135,21 @@ void main() {
           'not the impl queue position (0)',
     );
 
-    // 3. On the Now Playing screen, click row "Track 8".
-    await tester.dragUntilVisible(
-      find.text('Track 8 — Some Fairly Long Track Name Here'),
-      find.byType(ListView).last,
-      const Offset(0, -120),
+    // 3. On the zen track list, scroll programmatically to Track 8 and tap.
+    // (Scopes everything to the zen view: the hidden normal layer contains a
+    // copy of every row text.)
+    final zenList = find.descendant(
+      of: find.byType(ZenNowPlaying),
+      matching: find.byType(Scrollable),
+    ).first;
+    tester.state<ScrollableState>(zenList).position.jumpTo(320);
+    await tester.pump(const Duration(milliseconds: 200));
+    final track8 = find.descendant(
+      of: find.byType(ZenNowPlaying),
+      matching: find.text('Track 8 — Some Fairly Long Track Name Here'),
     );
-    for (var i = 0; i < 4; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
     final countBefore = client.requestedTrackPages.length;
-    await tester.tap(find.text('Track 8 — Some Fairly Long Track Name Here'));
+    await tester.tap(track8);
     final end = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(end) &&
         client.requestedTrackPages.length <= countBefore) {

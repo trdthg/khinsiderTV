@@ -5,7 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../state/update_controller.dart';
 
 /// Compact "update available" banner shown at the very top of the app.
-/// Dismissible; the version link opens the GitHub release page.
+/// Desktop: offers auto-download with progress, then reveal-in-folder.
+/// Mobile: keeps the View link (no auto-install without store signing).
 class UpdateBanner extends ConsumerWidget {
   const UpdateBanner({super.key});
 
@@ -16,6 +17,58 @@ class UpdateBanner extends ConsumerWidget {
     if (info == null || state.dismissed) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
+    final notifier = ref.read(updateControllerProvider.notifier);
+
+    final Widget leading;
+    switch (state.downloadPhase) {
+      case UpdateDownloadPhase.downloading:
+        leading = SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            value: state.downloadProgress > 0 ? state.downloadProgress : null,
+            color: scheme.primary,
+          ),
+        );
+      case UpdateDownloadPhase.downloaded:
+        leading = Icon(Icons.check_circle, size: 18, color: scheme.primary);
+      case UpdateDownloadPhase.failed:
+        leading = Icon(Icons.error_outline, size: 18, color: scheme.error);
+      case UpdateDownloadPhase.idle:
+        leading = Icon(Icons.system_update, size: 18, color: scheme.primary);
+    }
+
+    final Widget action;
+    switch (state.downloadPhase) {
+      case UpdateDownloadPhase.idle:
+        action = TextButton(
+          onPressed: () async {
+            await notifier.download();
+          },
+          child: const Text('Download'),
+        );
+      case UpdateDownloadPhase.downloading:
+        action = Text(
+          '${(state.downloadProgress * 100).toStringAsFixed(0)}%',
+          style: Theme.of(context).textTheme.bodySmall,
+        );
+      case UpdateDownloadPhase.downloaded:
+        action = TextButton(
+          onPressed: () async {
+            await notifier.revealDownload();
+          },
+          child: const Text('Show file'),
+        );
+      case UpdateDownloadPhase.failed:
+        action = TextButton(
+          onPressed: () async {
+            await notifier.download();
+          },
+          child: const Text('Retry'),
+        );
+    }
+
     return Material(
       color: scheme.primaryContainer,
       child: SafeArea(
@@ -24,14 +77,17 @@ class UpdateBanner extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
-              Icon(Icons.system_update, size: 18, color: scheme.primary),
+              leading,
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Update available: v${info.version}',
+                  state.downloadPhase == UpdateDownloadPhase.downloaded
+                      ? 'v${info.version} downloaded'
+                      : 'Update available: v${info.version}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
+              action,
               TextButton(
                 onPressed: () => launchUrl(
                   Uri.parse(info.url),

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 
 /// GitHub release update check.
@@ -37,11 +39,75 @@ class UpdateService {
     final latest = _versionOf(tag);
     if (!_isNewer(latest, _versionOf(currentVersion))) return null;
 
+    final assets = <UpdateAsset>[];
+    final rawAssets = data['assets'];
+    if (rawAssets is List) {
+      for (final a in rawAssets) {
+        if (a is Map<String, dynamic>) {
+          final name = a['name'] as String?;
+          final download = a['browser_download_url'] as String?;
+          if (name != null && download != null) {
+            assets.add(UpdateAsset(name: name, url: download));
+          }
+        }
+      }
+    }
+
     return UpdateInfo(
       version: latest,
       url: url,
       notes: (data['body'] as String?) ?? '',
+      assets: assets,
     );
+  }
+
+  /// Picks the right asset for the current desktop platform.
+  /// Returns null on platforms without auto-download (mobile: keep "View").
+  UpdateAsset? assetForPlatform(List<UpdateAsset> assets) {
+    if (Platform.isWindows) {
+      for (final a in assets) {
+        if (a.name.contains('windows') && a.name.endsWith('.zip')) return a;
+      }
+    }
+    if (Platform.isMacOS) {
+      for (final a in assets) {
+        if (a.name.contains('macos') && a.name.endsWith('.zip')) return a;
+      }
+    }
+    if (Platform.isLinux) {
+      for (final a in assets) {
+        if (a.name.endsWith('.flatpak')) return a;
+      }
+    }
+    return null;
+  }
+
+  /// Downloads [asset] into [saveDir], reporting progress 0..1.
+  Future<File> downloadAsset(
+    UpdateAsset asset, {
+    required Directory saveDir,
+    void Function(double progress)? onProgress,
+  }) async {
+    final file = File('${saveDir.path}${Platform.pathSeparator}${asset.name}');
+    await _dio.download(
+      asset.url,
+      file.path,
+      onReceiveProgress: (received, total) {
+        if (total > 0 && onProgress != null) onProgress(received / total);
+      },
+    );
+    return file;
+  }
+
+  /// Reveals [path] in the platform file manager (Finder / Explorer / xdg).
+  Future<void> revealInFileManager(String path) async {
+    if (Platform.isMacOS) {
+      await Process.run('open', ['-R', path]);
+    } else if (Platform.isWindows) {
+      await Process.run('explorer.exe', ['/select,', path]);
+    } else {
+      await Process.run('xdg-open', [File(path).parent.path]);
+    }
   }
 
   /// `v0.1.2` / `0.1.2` -> `0.1.2`
@@ -64,9 +130,22 @@ class UpdateService {
 }
 
 class UpdateInfo {
-  const UpdateInfo({required this.version, required this.url, this.notes = ''});
+  const UpdateInfo({
+    required this.version,
+    required this.url,
+    this.notes = '',
+    this.assets = const [],
+  });
 
   final String version;
   final String url;
   final String notes;
+  final List<UpdateAsset> assets;
+}
+
+class UpdateAsset {
+  const UpdateAsset({required this.name, required this.url});
+
+  final String name;
+  final String url;
 }
