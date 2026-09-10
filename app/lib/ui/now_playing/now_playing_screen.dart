@@ -214,11 +214,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                   child: Transform.scale(
                                     scale:
                                         1.0 + 0.015 * math.sin(t + math.pi / 3),
-                                    child: NowPlayingArt(
-                                      coverUrl: album.coverUrl,
-                                      spin: _spinCtrl,
-                                      glow: _glowCtrl.value,
-                                      size: artSize,
+                                    child: Hero(
+                                      tag: 'cover-${album.summary.id}',
+                                      child: NowPlayingArt(
+                                        coverUrl: album.coverUrl,
+                                        spin: _spinCtrl,
+                                        glow: _glowCtrl.value,
+                                        size: artSize,
+                                      ),
                                     ),
                                   ),
                                 );

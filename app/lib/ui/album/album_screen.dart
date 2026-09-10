@@ -312,14 +312,17 @@ class _LeftPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (album.coverUrl != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 252,
-              height: 252,
-              child: CachedNetworkImage(
-                imageUrl: album.coverUrl!,
-                fit: BoxFit.cover,
+          Hero(
+            tag: 'cover-${album.summary.id}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 252,
+                height: 252,
+                child: CachedNetworkImage(
+                  imageUrl: album.coverUrl!,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
