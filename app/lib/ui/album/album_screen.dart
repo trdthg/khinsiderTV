@@ -225,133 +225,142 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
           Focus(
             canRequestFocus: false,
             descendantsAreFocusable: !widget.menuOpen,
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final h = c.maxHeight;
-                final w = c.maxWidth;
-                final wide = w > 700;
-                final headerH = 56.0;
-                final t = zenT.value;
-                final coverSize = math.min(252.0, h * 0.35);
+            child: ListenableBuilder(
+              listenable: widget.zenT,
+              builder: (context, _) => LayoutBuilder(
+                builder: (context, c) {
+                  final h = c.maxHeight;
+                  final w = c.maxWidth;
+                  final wide = w > 700;
+                  final headerH = 56.0;
+                  final t = zenT.value;
+                  final coverSize = math.min(252.0, h * 0.35);
 
-                final coverNormal = Rect.fromLTWH(
-                  24,
-                  headerH + 8,
-                  coverSize,
-                  coverSize,
-                );
-                final coverZenSize = (w * 0.24).clamp(200.0, 320.0);
-                final coverZen = Rect.fromCenter(
-                  center: Offset(w * 0.25, h / 2),
-                  width: coverZenSize,
-                  height: coverZenSize,
-                );
-                final listNormal = Rect.fromLTWH(
-                  292,
-                  headerH + 8,
-                  w - 292 - 12,
-                  h - headerH - 8,
-                );
-                final listZen = Rect.fromLTWH(
-                  w / 2 + 16,
-                  (h - h * 0.8) / 2,
-                  w / 2 - 16 - 32,
-                  h * 0.8,
-                );
-                final coverRect = Rect.lerp(
-                  coverNormal,
-                  coverZen,
-                  Curves.easeInOut.transform(t),
-                )!;
-                final listRect = Rect.lerp(
-                  listNormal,
-                  listZen,
-                  Curves.easeInOut.transform(t),
-                )!;
+                  final coverNormal = Rect.fromLTWH(
+                    24,
+                    headerH + 8,
+                    coverSize,
+                    coverSize,
+                  );
+                  final coverZenSize = (w * 0.24).clamp(200.0, 320.0);
+                  final coverZen = Rect.fromCenter(
+                    center: Offset(w * 0.25, h / 2),
+                    width: coverZenSize,
+                    height: coverZenSize,
+                  );
+                  final listNormal = Rect.fromLTWH(
+                    292,
+                    headerH + 8,
+                    w - 292 - 12,
+                    h - headerH - 8,
+                  );
+                  final listZen = Rect.fromLTWH(
+                    w / 2 + 16,
+                    (h - h * 0.8) / 2,
+                    w / 2 - 16 - 32,
+                    h * 0.8,
+                  );
+                  final coverRect = Rect.lerp(
+                    coverNormal,
+                    coverZen,
+                    Curves.easeInOut.transform(t),
+                  )!;
+                  final listRect = Rect.lerp(
+                    listNormal,
+                    listZen,
+                    Curves.easeInOut.transform(t),
+                  )!;
 
-                final infoOpacity = (1 - t).clamp(0.0, 1.0);
+                  final infoOpacity = (1 - t).clamp(0.0, 1.0);
 
-                return Stack(
-                  children: [
-                    // Header (fades out in zen mode).
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      height: headerH,
-                      child: Opacity(
-                        opacity: (1 - t).clamp(0.0, 1.0),
-                        child: IgnorePointer(
-                          ignoring: widget.zen,
-                          child: Row(
-                            children: [
-                              BackButton(onPressed: widget.zen ? null : () {}),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  album.summary.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Force refresh (bypass cache)',
-                                onPressed: widget.zen ? null : widget.onRefresh,
-                                icon: const Icon(Icons.refresh),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Morphing cover (D-Pad focusable; Enter toggles the
-                    // menu in zen mode).
-                    Positioned.fromRect(
-                      rect: coverRect,
-                      child: DpadTile(
-                        focusNode: widget.coverFocus,
-                        autofocus: false,
-                        onSelect: () {
-                          if (widget.zen) {
-                            widget.onToggleMenu();
-                          }
-                        },
-                        child: NowPlayingArt(
-                          coverUrl: album.coverUrl,
-                          size: coverRect.width,
-                          vinylOpacity: t,
-                        ),
-                      ),
-                    ),
-                    // Morphing track list.
-                    Positioned.fromRect(
-                      rect: listRect,
-                      child: AlbumTrackList(
-                        album: album,
-                        focusNodes: widget.rowFocusNodes,
-                        onTrackActivated: widget.onTrackActivated,
-                        showRelated: !widget.zen,
-                      ),
-                    ),
-                    // Info panel (wide, normal mode only; flies away).
-                    if (wide)
+                  return Stack(
+                    children: [
+                      // Header (fades out in zen mode).
                       Positioned(
-                        left: 24 - 360 * t,
-                        top: headerH + 8 + coverSize + 12 + 200 * t,
-                        width: 252,
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        height: headerH,
                         child: Opacity(
-                          opacity: infoOpacity,
+                          opacity: (1 - t).clamp(0.0, 1.0),
                           child: IgnorePointer(
                             ignoring: widget.zen,
-                            child: _InfoPanel(album: album),
+                            child: Row(
+                              children: [
+                                BackButton(
+                                  onPressed: widget.zen ? null : () {},
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    album.summary.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Force refresh (bypass cache)',
+                                  onPressed: widget.zen
+                                      ? null
+                                      : widget.onRefresh,
+                                  icon: const Icon(Icons.refresh),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                  ],
-                );
-              },
+                      // Morphing cover (D-Pad focusable; Enter toggles the
+                      // menu in zen mode).
+                      Positioned.fromRect(
+                        rect: coverRect,
+                        child: DpadTile(
+                          focusNode: widget.coverFocus,
+                          autofocus: false,
+                          onSelect: () {
+                            if (widget.zen) {
+                              widget.onToggleMenu();
+                            }
+                          },
+                          child: NowPlayingArt(
+                            coverUrl: album.coverUrl,
+                            size: coverRect.width,
+                            vinylOpacity: t,
+                          ),
+                        ),
+                      ),
+                      // Morphing track list.
+                      Positioned.fromRect(
+                        rect: listRect,
+                        child: AlbumTrackList(
+                          album: album,
+                          focusNodes: widget.rowFocusNodes,
+                          onTrackActivated: widget.onTrackActivated,
+                          showRelated: !widget.zen,
+                        ),
+                      ),
+                      // Info panel (wide, normal mode only; flies away).
+                      if (wide)
+                        Positioned(
+                          left: 24 - 360 * t,
+                          top: headerH + 8 + coverSize + 12 + 200 * t,
+                          width: 252,
+                          child: Opacity(
+                            opacity: infoOpacity,
+                            child: IgnorePointer(
+                              ignoring: widget.zen,
+                              child: _InfoPanel(album: album),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           // OSD menu overlay (zen mode only) — OUTSIDE the background Focus
