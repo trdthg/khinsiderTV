@@ -33,6 +33,8 @@ class UpdateBanner extends ConsumerWidget {
         );
       case UpdateDownloadPhase.downloaded:
         leading = Icon(Icons.check_circle, size: 18, color: scheme.primary);
+      case UpdateDownloadPhase.extracting:
+      case UpdateDownloadPhase.ready:
       case UpdateDownloadPhase.failed:
         leading = Icon(Icons.error_outline, size: 18, color: scheme.error);
       case UpdateDownloadPhase.idle:
@@ -60,6 +62,8 @@ class UpdateBanner extends ConsumerWidget {
           },
           child: const Text('Show file'),
         );
+      case UpdateDownloadPhase.extracting:
+      case UpdateDownloadPhase.ready:
       case UpdateDownloadPhase.failed:
         action = TextButton(
           onPressed: () async {

@@ -60,7 +60,7 @@ class UpdateController extends Notifier<UpdateState> {
       final base = await getApplicationSupportDirectory();
       final saveDir = Directory('${base.path}${Platform.pathSeparator}updates');
       await saveDir.create(recursive: true);
-      final file = await service.downloadAsset(
+      await service.downloadAsset(
         asset,
         saveDir: saveDir,
         onProgress: (p) {
@@ -70,10 +70,12 @@ class UpdateController extends Notifier<UpdateState> {
         },
       );
       if (!ref.mounted) return;
-      state = state.copyWith(
-        downloadPhase: UpdateDownloadPhase.downloaded,
-        downloadedFile: file.path,
-      );
+      // Auto-extract right after the download so the update is ready to
+      // apply (at startup or via Restart & update).
+      state = state.copyWith(downloadPhase: UpdateDownloadPhase.extracting);
+      await extractPendingUpdate();
+      if (!ref.mounted) return;
+      state = state.copyWith(downloadPhase: UpdateDownloadPhase.ready);
     } catch (_) {
       if (!ref.mounted) return;
       state = state.copyWith(downloadPhase: UpdateDownloadPhase.failed);
@@ -86,9 +88,23 @@ class UpdateController extends Notifier<UpdateState> {
     if (path == null) return;
     await ref.read(updateServiceProvider).revealInFileManager(path);
   }
+
+  /// Windows: restarts via a detached batch script (wait -> swap -> relaunch).
+  /// macOS: replaces the running bundle then relaunches the new instance.
+  /// Linux: installs the flatpak bundle; the user relaunches from the Deck UI.
+  Future<void> restartAndUpdate() async {
+    await restartAndApply();
+  }
 }
 
-enum UpdateDownloadPhase { idle, downloading, downloaded, failed }
+enum UpdateDownloadPhase {
+  idle,
+  downloading,
+  downloaded,
+  extracting,
+  ready,
+  failed,
+}
 
 class UpdateState {
   const UpdateState({

@@ -114,15 +114,19 @@ jobs:
           flutter pub get
           flutter build macos --release \
             --build-name=${{ needs.version.outputs.version }}
-      - name: Zip app bundle
+      - name: Create DMG + zip app bundle
         run: |
           mkdir -p dist
           cd app/build/macos/Build/Products/Release
+          hdiutil create -volname KHInsider \
+            -srcfolder khinsider.app \
+            -ov -format UDZO \
+            "$GITHUB_WORKSPACE/dist/khinsider-${{ needs.version.outputs.version }}-macos.dmg"
           ditto -c -k --sequesterRsrc --keepParent khinsider.app \
             "$GITHUB_WORKSPACE/dist/khinsider-${{ needs.version.outputs.version }}-macos.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-app
+          name: macos-dist
           path: dist/
 
   # ----------------------------------------------------------------- ios ----
@@ -178,9 +182,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "app/build/windows/x64/runner/Release/*" `
             -DestinationPath "dist/khinsider-${{ needs.version.outputs.version }}-windows.zip" -Force
+      - name: Build Inno Setup installer (single setup exe)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $env:APP_VERSION = "${{ needs.version.outputs.version }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=$env:APP_VERSION packaging/windows/khinsider.iss
+          Copy-Item "packaging/windows/Output/khinsider-*-windows-setup.exe" dist/
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-zip
+          name: windows-dist
           path: dist/
 
   # ------------------------------------------------------ linux (flatpak) --
@@ -264,7 +275,8 @@ jobs:
             --command=khinsider \
             --share=ipc --share=network \
             --socket=x11 --socket=wayland --socket=pulseaudio \
-            --device=dri
+            --device=dri \
+            --talk-name=org.freedesktop.Flatpak
       - name: Export repo + build single-file bundle
         run: |
           flatpak build-export repo appdir
@@ -284,7 +296,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: '{android-apk,ios-ipa,macos-app,windows-zip,flatpak-steamdeck}'
+          pattern: '{android-apk,ios-ipa,macos-dist,windows-dist,flatpak-steamdeck}'
           path: dist
           merge-multiple: true
       - name: List artifacts

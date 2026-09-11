@@ -1,5 +1,7 @@
 import 'dart:io' as dart_io;
+
 import 'package:audio_service/audio_service.dart'; // supported: android/ios/macos/web
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:flutter/services.dart';
@@ -9,10 +11,20 @@ import 'app.dart';
 import 'audio/base_audio_player.dart';
 import 'audio/just_audio_player_impl.dart';
 import 'audio/audio_service_handler.dart';
+import 'data/update_service.dart';
 import 'state/player_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Apply a pending update extracted in a previous session (desktop only):
+  // the files on disk are swapped and THIS session continues as-is — the
+  // NEXT launch uses the new version.
+  if (!kDebugMode) {
+    try {
+      await applyPendingUpdate();
+    } catch (_) {}
+  }
 
   // Windows/Linux playback backend for just_audio (no-op on macOS/Android).
   JustAudioMediaKit.ensureInitialized();
