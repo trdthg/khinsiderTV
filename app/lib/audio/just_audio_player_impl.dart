@@ -35,7 +35,6 @@ class JustAudioPlayerImpl implements BaseAudioPlayer {
   /// resume, fully cached tracks play instantly). We must NOT cache the
   /// source objects themselves: just_audio disposes old sources on
   /// setAudioSources, and reusing a disposed source causes a deadlock.
-  final Map<String, LockCachingAudioSource> _sourcesByUrl = {};
 
   Future<LockCachingAudioSource> _sourceFor(PlayableItem it) async {
     final file = await _cache.fileFor(it.url);
