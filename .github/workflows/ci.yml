@@ -188,7 +188,7 @@ jobs:
           choco install innosetup -y --no-progress
           $env:APP_VERSION = "${{ needs.version.outputs.version }}"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=$env:APP_VERSION packaging/windows/khinsider.iss
-          Copy-Item "packaging/windows/Output/khinsider-*-windows-setup.exe" dist/
+          Copy-Item "packaging/khinsider-*-windows-setup.exe" dist/
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
