@@ -30,17 +30,16 @@ class JustAudioPlayerImpl implements BaseAudioPlayer {
   /// the player sequence. Used by [swapCurrentSource].
   final List<PlayableItem> _items = [];
 
-  /// Cache sources by URL so the same track always maps to the same
-  /// download state / cache file.
+  /// Creates a FRESH LockCachingAudioSource each time. The `cacheFile`
+  /// param ensures the downloaded audio file is reused (partial downloads
+  /// resume, fully cached tracks play instantly). We must NOT cache the
+  /// source objects themselves: just_audio disposes old sources on
+  /// setAudioSources, and reusing a disposed source causes a deadlock.
   final Map<String, LockCachingAudioSource> _sourcesByUrl = {};
 
   Future<LockCachingAudioSource> _sourceFor(PlayableItem it) async {
-    final existing = _sourcesByUrl[it.url];
-    if (existing != null) return existing;
     final file = await _cache.fileFor(it.url);
-    final source = LockCachingAudioSource(Uri.parse(it.url), cacheFile: file);
-    _sourcesByUrl[it.url] = source;
-    return source;
+    return LockCachingAudioSource(Uri.parse(it.url), cacheFile: file);
   }
 
   final _snapshotCtrl = StreamController<AudioPlayerSnapshot>.broadcast();
