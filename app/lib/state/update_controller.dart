@@ -70,16 +70,38 @@ class UpdateController extends Notifier<UpdateState> {
         },
       );
       if (!ref.mounted) return;
-      // Auto-extract right after the download so the update is ready to
-      // apply (at startup or via Restart & update).
-      state = state.copyWith(downloadPhase: UpdateDownloadPhase.extracting);
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        downloadPhase: UpdateDownloadPhase.failed,
+        errorMessage: 'Download failed: $e',
+      );
+      return;
+    }
+    // Auto-extract right after the download so the update is ready to
+    // apply (at startup or via Restart & update).
+    state = state.copyWith(downloadPhase: UpdateDownloadPhase.extracting);
+    try {
       await extractPendingUpdate();
       if (!ref.mounted) return;
       state = state.copyWith(downloadPhase: UpdateDownloadPhase.ready);
-    } catch (_) {
+    } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(downloadPhase: UpdateDownloadPhase.failed);
+      state = state.copyWith(
+        downloadPhase: UpdateDownloadPhase.failed,
+        errorMessage: 'Extract failed: $e',
+      );
     }
+  }
+
+  /// Reset to idle and re-download.
+  Future<void> retryDownload() async {
+    state = state.copyWith(
+      downloadPhase: UpdateDownloadPhase.idle,
+      errorMessage: null,
+      downloadProgress: 0,
+    );
+    await download();
   }
 
   /// Reveal the downloaded file in the platform file manager.
@@ -114,6 +136,7 @@ class UpdateState {
     this.downloadPhase = UpdateDownloadPhase.idle,
     this.downloadProgress = 0,
     this.downloadedFile,
+    this.errorMessage,
   });
 
   /// Non-null when a newer release exists.
@@ -124,6 +147,7 @@ class UpdateState {
   final UpdateDownloadPhase downloadPhase;
   final double downloadProgress;
   final String? downloadedFile;
+  final String? errorMessage;
 
   bool get showBanner => available != null && !dismissed;
 
@@ -134,6 +158,7 @@ class UpdateState {
     UpdateDownloadPhase? downloadPhase,
     double? downloadProgress,
     String? downloadedFile,
+    String? errorMessage,
   }) => UpdateState(
     available: available ?? this.available,
     checking: checking ?? this.checking,
@@ -141,6 +166,7 @@ class UpdateState {
     downloadPhase: downloadPhase ?? this.downloadPhase,
     downloadProgress: downloadProgress ?? this.downloadProgress,
     downloadedFile: downloadedFile ?? this.downloadedFile,
+    errorMessage: errorMessage ?? this.errorMessage,
   );
 }
 

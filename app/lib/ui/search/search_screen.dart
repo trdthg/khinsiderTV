@@ -45,6 +45,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 children: [
                   Expanded(
                     child: TextField(
+                      autofocus: true,
                       controller: _controller,
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _submit(),

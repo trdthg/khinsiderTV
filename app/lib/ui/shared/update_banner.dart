@@ -67,7 +67,7 @@ class UpdateBanner extends ConsumerWidget {
       case UpdateDownloadPhase.failed:
         action = TextButton(
           onPressed: () async {
-            await notifier.download();
+            await notifier.retryDownload();
           },
           child: const Text('Retry'),
         );
@@ -85,9 +85,13 @@ class UpdateBanner extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  state.downloadPhase == UpdateDownloadPhase.downloaded
-                      ? 'v${info.version} downloaded'
+                  state.downloadPhase == UpdateDownloadPhase.failed
+                      ? (state.errorMessage ?? 'Update failed')
+                      : state.downloadPhase == UpdateDownloadPhase.ready
+                      ? 'v${info.version} ready to install'
                       : 'Update available: v${info.version}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
