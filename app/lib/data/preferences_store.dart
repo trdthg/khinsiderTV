@@ -25,8 +25,8 @@ class FavoritesController extends AsyncNotifier<List<AlbumSummary>> {
   @override
   Future<List<AlbumSummary>> build() async {
     final store = await ref.watch(jsonKvStoreProvider.future);
-    final raw = store.readList<Map<String, dynamic>>(_kFavorites);
-    return raw.map(albumSummaryFromJson).toList();
+    final raw = store.readList<Object?>(_kFavorites);
+    return raw.map(tryAlbumSummaryFromJson).whereType<AlbumSummary>().toList();
   }
 
   bool isFavorite(String albumId) =>
@@ -86,8 +86,8 @@ class RecentAlbumsController extends AsyncNotifier<List<AlbumSummary>> {
   @override
   Future<List<AlbumSummary>> build() async {
     final store = await ref.watch(jsonKvStoreProvider.future);
-    final raw = store.readList<Map<String, dynamic>>(_kRecentAlbums);
-    return raw.map(albumSummaryFromJson).toList();
+    final raw = store.readList<Object?>(_kRecentAlbums);
+    return raw.map(tryAlbumSummaryFromJson).whereType<AlbumSummary>().toList();
   }
 
   Future<void> record(AlbumSummary album) async {
@@ -116,12 +116,31 @@ Map<String, dynamic> albumSummaryToJson(AlbumSummary a) => {
   'year': a.year,
 };
 
-AlbumSummary albumSummaryFromJson(Map<String, dynamic> j) => AlbumSummary(
-  id: j['id'] as String,
-  title: j['title'] as String,
-  urlPath: j['urlPath'] as String,
-  thumbUrl: j['thumbUrl'] as String?,
-  platforms: (j['platforms'] as List?)?.cast<String>() ?? const [],
-  type: j['type'] as String?,
-  year: j['year'] as String?,
-);
+/// Tolerant decode: persisted entries come straight from a JSON file the
+/// user (or a schema change) can hand-edit, so a malformed record must be
+/// skipped rather than poison the whole favorites/recents provider.
+AlbumSummary? tryAlbumSummaryFromJson(Object? value) {
+  if (value is! Map) return null;
+  final j = value;
+  // `id`/`title`/`urlPath` are the load-bearing fields; without them the
+  // album cannot be opened again.
+  final id = j['id'];
+  final title = j['title'];
+  final urlPath = j['urlPath'];
+  if (id is! String || title is! String || urlPath is! String) return null;
+  return AlbumSummary(
+    id: id,
+    title: title,
+    urlPath: urlPath,
+    thumbUrl: j['thumbUrl'] is String ? j['thumbUrl'] as String : null,
+    platforms:
+        (j['platforms'] as List?)?.whereType<String>().toList() ??
+        const <String>[],
+    type: j['type'] is String ? j['type'] as String : null,
+    year: j['year'] is String ? j['year'] as String : null,
+  );
+}
+
+/// Strict decode kept for callers that already validated the payload.
+AlbumSummary albumSummaryFromJson(Map<String, dynamic> j) =>
+    tryAlbumSummaryFromJson(j)!;

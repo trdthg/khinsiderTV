@@ -9,6 +9,11 @@ import 'state/theme_controller.dart';
 import 'ui/album/album_screen.dart';
 import 'ui/search/search_screen.dart';
 
+/// Shared with [GlobalMediaKeys], which sits above the navigator and can
+/// therefore not look it up with `Navigator.of`.
+final GlobalKey<NavigatorState> khinsiderNavigatorKey =
+    GlobalKey<NavigatorState>();
+
 class KhinsiderApp extends ConsumerWidget {
   const KhinsiderApp({super.key});
 
@@ -19,6 +24,7 @@ class KhinsiderApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'KHInsider',
+      navigatorKey: khinsiderNavigatorKey,
       theme: AppTheme.dark(seed: seed),
       onGenerateRoute: (settings) {
         debugPrint('E2E: route ${settings.name} args ${settings.arguments}');
@@ -31,6 +37,7 @@ class KhinsiderApp extends ConsumerWidget {
         return MaterialPageRoute<void>(builder: (_) => const SearchScreen());
       },
       builder: (context, child) => GlobalMediaKeys(
+        navigatorKey: khinsiderNavigatorKey,
         child: Column(
           children: [
             const UpdateBanner(),

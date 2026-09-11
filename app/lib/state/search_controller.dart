@@ -33,6 +33,10 @@ class SearchState {
 }
 
 class SearchController extends Notifier<SearchState> {
+  /// Increments on every [search] call so a slow earlier request can never
+  /// overwrite the results of a newer one (out-of-order responses).
+  int _generation = 0;
+
   @override
   SearchState build() => const SearchState();
 
@@ -40,13 +44,16 @@ class SearchController extends Notifier<SearchState> {
     final q = query.trim();
     if (q.isEmpty) return;
 
+    final generation = ++_generation;
     state = state.copyWith(query: q, loading: true);
     try {
       final results = await ref
           .read(khinsiderClientProvider)
           .searchAlbums(q, forceRefresh: forceRefresh);
+      if (!ref.mounted || generation != _generation) return; // superseded
       state = SearchState(query: q, results: results);
     } catch (e) {
+      if (!ref.mounted || generation != _generation) return;
       state = state.copyWith(loading: false, error: 'Search failed: $e');
     }
   }

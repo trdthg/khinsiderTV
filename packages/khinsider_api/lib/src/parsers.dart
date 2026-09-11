@@ -18,17 +18,22 @@ abstract final class KhinsiderParsers {
     for (final row in table.querySelectorAll('tr')) {
       if (row.querySelector('th') != null) continue; // header row
 
+      final cells = row.querySelectorAll('td');
+      if (cells.isEmpty) continue; // empty/placeholder row
+
       final iconCell = row.querySelector('td.albumIcon');
+      // The album link usually lives in the icon cell; fall back to the
+      // title cell. Guarded by index so a truncated row is skipped instead
+      // of throwing a RangeError on unexpected markup.
       final link =
           iconCell?.querySelector('a[href]') ??
-          row.querySelectorAll('td')[1].querySelector('a[href]');
+          (cells.length > 1 ? cells[1].querySelector('a[href]') : null);
       if (link == null) continue;
 
       final path = link.attributes['href'];
       if (path == null || !path.contains('/album/')) continue;
 
       final img = iconCell?.querySelector('img[src]');
-      final cells = row.querySelectorAll('td');
 
       // Title cell may carry a trailing catalog-number span, e.g. [NTD-17189].
       final titleCell = cells.length > 1 ? cells[1] : null;
@@ -131,9 +136,7 @@ abstract final class KhinsiderParsers {
     }
 
     return Album(
-      summary:
-          summary ??
-          AlbumSummary(id: _albumIdFromPath('/x'), title: title, urlPath: ''),
+      summary: summary ?? AlbumSummary(id: '', title: title, urlPath: ''),
       coverUrl: coverUrl,
       tracks: tracks,
       metadata: metadata,

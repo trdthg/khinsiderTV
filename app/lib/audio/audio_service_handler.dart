@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 
 import 'base_audio_player.dart';
@@ -13,16 +14,23 @@ class KhinsiderAudioHandler extends BaseAudioHandler
   final JustAudioPlayerImpl _inner = JustAudioPlayerImpl();
 
   Duration _lastPosition = Duration.zero;
+  final List<StreamSubscription> _subs = [];
+  bool _disposed = false;
 
   KhinsiderAudioHandler() {
-    _inner.snapshotStream.listen((snap) {
-      _latestSnapshot = snap;
-      _onSnapshot(snap);
-    });
-    _inner.positionStream.listen((p) {
-      _lastPosition = p;
-      _publishPlayback();
-    });
+    _subs
+      ..add(
+        _inner.snapshotStream.listen((snap) {
+          _latestSnapshot = snap;
+          _onSnapshot(snap);
+        }),
+      )
+      ..add(
+        _inner.positionStream.listen((p) {
+          _lastPosition = p;
+          _publishPlayback();
+        }),
+      );
   }
 
   // -- BaseAudioPlayer -------------------------------------------------------
@@ -41,16 +49,18 @@ class KhinsiderAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> loadQueue(List<PlayableItem> items, {int startIndex = 0}) async {
+    // Publish the mirror only after the inner call succeeded, otherwise the
+    // system media session could advertise a queue that is not playing.
+    await _inner.loadQueue(items, startIndex: startIndex);
     _queueItems
       ..clear()
       ..addAll(items);
-    await _inner.loadQueue(items, startIndex: startIndex);
   }
 
   @override
   Future<void> append(List<PlayableItem> items) async {
-    _queueItems.addAll(items);
     await _inner.append(items);
+    _queueItems.addAll(items);
   }
 
   @override
@@ -78,7 +88,15 @@ class KhinsiderAudioHandler extends BaseAudioHandler
   Future<void> skipToIndex(int index) => _inner.skipToIndex(index);
 
   @override
-  Future<void> dispose() => _inner.dispose();
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    for (final sub in _subs) {
+      await sub.cancel();
+    }
+    _subs.clear();
+    await _inner.dispose();
+  }
 
   // -- audio_service interface (system media controls) -----------------------
 
@@ -104,8 +122,9 @@ class KhinsiderAudioHandler extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
-    _queueItems.clear();
     await _inner.stop();
+    _queueItems.clear();
+    mediaItem.add(null); // nothing is playing any more
     await super.stop(); // audio_service: end foreground/notification state
   }
 

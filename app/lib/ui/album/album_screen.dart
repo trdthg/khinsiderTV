@@ -8,6 +8,7 @@ import 'package:khinsider_api/khinsider_api.dart';
 
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
+import '../../state/track_cache_controller.dart';
 import '../../state/album_controller.dart';
 import '../../state/player_controller.dart';
 import '../now_playing/now_playing_art.dart';
@@ -37,7 +38,7 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
     with TickerProviderStateMixin {
   int _refreshNonce = 0;
   bool _zen = false;
-  int _zenStartIndex = 0;
+  bool _initialFocusDone = false;
   bool _menuOpen = false;
 
   late final AnimationController _zenCtrl = AnimationController(
@@ -52,18 +53,84 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
   final _coverFocus = FocusNode(debugLabel: 'cover');
   final _menuPlayFocus = FocusNode(debugLabel: 'menu-play');
   List<FocusNode> _rowFocusNodes = const [];
+  int _rowFocusCount = -1;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final player = ref.read(playerControllerProvider);
+      final current = player.current;
+      if (current == null) return;
+      if (current.album.summary.id == widget.albumId) return;
+      unawaited(ref.read(playerControllerProvider.notifier).stop());
+    });
+  }
+
+  /// Resizes the per-row focus nodes to [count].
+  ///
+  /// MUST NOT be called from `build()`: resizing disposes nodes that may
+  /// still be attached to the previous frame (and possibly still focused),
+  /// which throws "A FocusNode was used after being disposed". Surplus nodes
+  /// are retired in a post-frame callback, once the tree has settled.
   List<FocusNode> _ensureRowFocusNodes(int count) {
-    if (_rowFocusNodes.length != count) {
-      for (final n in _rowFocusNodes) {
-        n.dispose();
-      }
-      _rowFocusNodes = List.generate(
-        count,
-        (i) => FocusNode(debugLabel: 'row-$i'),
-      );
+    if (_rowFocusCount == count) return _rowFocusNodes;
+    final retired = _rowFocusNodes.length > count
+        ? _rowFocusNodes.sublist(count)
+        : const <FocusNode>[];
+    _rowFocusNodes = List<FocusNode>.generate(
+      count,
+      (i) => i < _rowFocusNodes.length
+          ? _rowFocusNodes[i]
+          : FocusNode(debugLabel: 'row-$i'),
+    );
+    _rowFocusCount = count;
+    if (retired.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final n in retired) {
+          n.dispose();
+        }
+      });
     }
     return _rowFocusNodes;
+  }
+
+  /// Puts the keyboard focus on the first track when the album opens.
+  ///
+  /// Nothing is played here — focus and playback are two different things.
+  /// Without this the album page has NO focus at all, which means key events
+  /// are delivered to the focus root and neither Esc nor the arrow keys do
+  /// anything (see the page-level Focus below).
+  void _focusFirstTrack() {
+    if (_initialFocusDone || _zen) return;
+    _initialFocusDone = true;
+    _requestRowFocus(0, attempts: 12);
+  }
+
+  /// Focuses [index] after the current frame, retrying for a few frames.
+  ///
+  /// The retry matters because the page is usually pushed as a ROUTE: while
+  /// the route transition runs, the navigator's own focus scope can grab the
+  /// focus back, and a single post-frame request would be lost.
+  void _requestRowFocus(int index, {int attempts = 1}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _zen || index >= _rowFocusNodes.length) return;
+      final node = _rowFocusNodes[index];
+      node.requestFocus();
+      if (!node.hasFocus && attempts > 1) {
+        _requestRowFocus(index, attempts: attempts - 1);
+      }
+    });
+  }
+
+  /// Points the cache-status controller at this album (post-frame: it is a
+  /// side effect and must not run during build).
+  void _syncCacheStatus(Album album) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(albumCacheProvider.notifier).sync(album));
+    });
   }
 
   void _activateTrack(Album album, int index) {
@@ -73,7 +140,6 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
           .playAlbum(album, startIndex: index),
     );
     setState(() {
-      _zenStartIndex = index;
       _zen = true;
     });
     _zenCtrl.forward();
@@ -145,20 +211,26 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
           ],
         ),
       ),
-      data: (album) => _AlbumPage(
-        album: album,
-        zen: _zen,
-        zenT: _zenT,
-        zenStartIndex: _zenStartIndex,
-        menuOpen: _menuOpen,
-        rowFocusNodes: _ensureRowFocusNodes(album.tracks.length),
-        coverFocus: _coverFocus,
-        menuPlayFocus: _menuPlayFocus,
-        onTrackActivated: (index) => _activateTrack(album, index),
-        onExitZen: _exitZen,
-        onToggleMenu: _toggleMenu,
-        onRefresh: () => setState(() => _refreshNonce++),
-      ),
+      data: (album) {
+        _focusFirstTrack();
+        _syncCacheStatus(album);
+        return ColoredBox(
+          color: Theme.of(context).colorScheme.surface,
+          child: _AlbumPage(
+            album: album,
+            zen: _zen,
+            zenT: _zenT,
+            menuOpen: _menuOpen,
+            rowFocusNodes: _ensureRowFocusNodes(album.tracks.length),
+            coverFocus: _coverFocus,
+            menuPlayFocus: _menuPlayFocus,
+            onTrackActivated: (index) => _activateTrack(album, index),
+            onExitZen: _exitZen,
+            onToggleMenu: _toggleMenu,
+            onRefresh: () => setState(() => _refreshNonce++),
+          ),
+        );
+      },
     );
   }
 }
@@ -168,7 +240,6 @@ class _AlbumPage extends ConsumerStatefulWidget {
     required this.album,
     required this.zen,
     required this.zenT,
-    required this.zenStartIndex,
     required this.menuOpen,
     required this.rowFocusNodes,
     required this.coverFocus,
@@ -184,7 +255,6 @@ class _AlbumPage extends ConsumerStatefulWidget {
 
   /// 0 = album layout, 1 = zen layout.
   final Animation<double> zenT;
-  final int zenStartIndex;
   final bool menuOpen;
   final List<FocusNode> rowFocusNodes;
   final FocusNode coverFocus;
@@ -199,29 +269,52 @@ class _AlbumPage extends ConsumerStatefulWidget {
 }
 
 class _AlbumPageState extends ConsumerState<_AlbumPage> {
+  /// Leave the album: pop when there is a route to pop, otherwise fall back to
+  /// the search screen.
+  ///
+  /// `maybePop` on the root route is a silent no-op, which used to make the
+  /// back button (and Esc) look dead when the album screen happened to be the
+  /// entry route.
+  void _leave() {
+    unawaited(ref.read(playerControllerProvider.notifier).pause());
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.maybePop();
+    } else {
+      navigator.pushReplacementNamed('/');
+    }
+  }
+
+  /// Esc / gamepad B: menu open -> close it; otherwise exit zen mode.
+  void _onBack() {
+    if (widget.zen) {
+      widget.menuOpen ? widget.onToggleMenu() : widget.onExitZen();
+    } else {
+      _leave();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final album = widget.album;
     final zenT = widget.zenT;
 
-    // Esc: menu open -> close it; otherwise exit zen mode. This Focus is an
-    // ancestor of everything in _AlbumPage (including the OSD menu), so
-    // bubbled Esc events reach it.
+    // This Focus is an ancestor of everything in _AlbumPage (including the
+    // OSD menu), so Esc bubbled up from a focused row reaches it.
+    //
+    // It is also FOCUSABLE and autofocuses: with no focused widget at all
+    // (right after entering the screen with a mouse, before the first row
+    // took focus) key events are delivered to the focus root and this handler
+    // would never see them. Being the fallback node is what makes Esc work
+    // even when "there is no focus" on the page.
     return Focus(
-      canRequestFocus: false,
+      autofocus: true,
+      debugLabel: 'album-page',
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.escape ||
                 event.logicalKey == LogicalKeyboardKey.gameButtonB)) {
-          if (widget.zen) {
-            // Zen mode: menu open -> close it; otherwise exit zen.
-            widget.menuOpen ? widget.onToggleMenu() : widget.onExitZen();
-          } else {
-            // Normal album page: go back to the search screen.
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          }
+          _onBack();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -295,7 +388,10 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                             child: Row(
                               children: [
                                 BackButton(
-                                  onPressed: widget.zen ? null : () {},
+                                  // Used to be `onPressed: widget.zen ? null
+                                  // : ...`, which disabled the button in zen
+                                  // mode; back always means "one level out".
+                                  onPressed: _onBack,
                                 ),
                                 const SizedBox(width: 4),
                                 Expanded(
@@ -308,12 +404,12 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                                     ).textTheme.titleLarge,
                                   ),
                                 ),
-                                IconButton(
+                                DpadIconButton(
                                   tooltip: 'Force refresh (bypass cache)',
+                                  icon: Icons.refresh,
                                   onPressed: widget.zen
                                       ? null
                                       : widget.onRefresh,
-                                  icon: const Icon(Icons.refresh),
                                 ),
                                 const SizedBox(width: 8),
                               ],
@@ -340,14 +436,29 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                           ),
                         ),
                       ),
-                      // Morphing track list.
+                      // Morphing track list. It moves to the right and is
+                      // vertically centred by its own intrinsic height.
                       Positioned.fromRect(
                         rect: listRect,
-                        child: AlbumTrackList(
-                          album: album,
-                          focusNodes: widget.rowFocusNodes,
-                          onTrackActivated: widget.onTrackActivated,
-                          showRelated: !widget.zen,
+                        child: Align(
+                          alignment:
+                              Alignment.lerp(
+                                Alignment.topLeft,
+                                Alignment.center,
+                                Curves.easeInOut.transform(t),
+                              ) ??
+                              Alignment.topCenter,
+                          child: AlbumTrackList(
+                            album: album,
+                            focusNodes: widget.rowFocusNodes,
+                            onTrackActivated: widget.onTrackActivated,
+                            // The tail must stay mounted while it flies away,
+                            // otherwise it would pop out of the tree the moment
+                            // zen starts (which is exactly what it used to do).
+                            showRelated: !widget.zen || widget.zenT.value < 1.0,
+                            zenT: widget.zenT,
+                            isZen: widget.zen,
+                          ),
                         ),
                       ),
                       // Info panel (wide, normal mode only; flies away).
@@ -411,11 +522,19 @@ class _InfoPanel extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
-        FilledButton.tonalIcon(
-          onPressed: () =>
+        DpadTile(
+          borderRadius: 20,
+          onSelect: () =>
               ref.read(favoritesProvider.notifier).toggle(album.summary),
-          icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
-          label: Text(isFav ? 'In favorites' : 'Favorite'),
+          child: ExcludeFocus(
+            child: IgnorePointer(
+              child: FilledButton.tonalIcon(
+                onPressed: () {},
+                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+                label: Text(isFav ? 'In favorites' : 'Favorite'),
+              ),
+            ),
+          ),
         ),
         if (album.metadata != null) ...[
           const SizedBox(height: 16),
@@ -423,7 +542,72 @@ class _InfoPanel extends ConsumerWidget {
           const SizedBox(height: 6),
           AlbumMetadataPanel(metadata: album.metadata!),
         ],
+        const SizedBox(height: 16),
+        _CacheFolderHint(albumId: album.summary.id),
       ],
+    );
+  }
+}
+
+/// Where the cached tracks of this album end up on disk
+/// (`Music/KHInsider/<Album>/mp3|flac|image|other`), so the user can find,
+/// export, delete or play them with another player.
+class _CacheFolderHint extends ConsumerWidget {
+  const _CacheFolderHint({required this.albumId});
+
+  final String albumId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cache = ref.watch(albumCacheProvider);
+    if (cache.albumId != albumId) return const SizedBox.shrink();
+    final path = cache.folderPath;
+    final scheme = Theme.of(context).colorScheme;
+    final text = path ?? 'Played tracks are saved to Music/KHInsider';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: scheme.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2, right: 6),
+            child: Icon(Icons.folder_open, size: 16),
+          ),
+          Expanded(
+            child: Tooltip(
+              message:
+                  'Cached files are kept here so you can find, export, '
+                  'delete or play them with any other player.',
+              waitDuration: const Duration(milliseconds: 350),
+              child: Text(
+                text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          DpadIconButton(
+            tooltip: 'Copy cache folder path',
+            iconSize: 16,
+            icon: Icons.copy,
+            onPressed: path == null
+                ? null
+                : () async {
+                    await Clipboard.setData(ClipboardData(text: path));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Copied: $path')));
+                  },
+          ),
+        ],
+      ),
     );
   }
 }

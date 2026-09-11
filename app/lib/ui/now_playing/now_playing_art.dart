@@ -32,7 +32,7 @@ class _NowPlayingArtState extends ConsumerState<NowPlayingArt>
   late final AnimationController _floatCtrl = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 4),
-  )..repeat();
+  );
   late final AnimationController _spinCtrl = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 9),
@@ -40,18 +40,55 @@ class _NowPlayingArtState extends ConsumerState<NowPlayingArt>
   late final AnimationController _glowCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2200),
-  )..repeat(reverse: true);
+  );
+
+  bool _playing = false;
 
   @override
   void initState() {
     super.initState();
     ref.listenManual(playerControllerProvider, (_, next) {
-      if (next.playing) {
-        if (!_spinCtrl.isAnimating) _spinCtrl.repeat();
+      _playing = next.playing;
+      _syncAnimations();
+    }, fireImmediately: true);
+  }
+
+  @override
+  void didUpdateWidget(NowPlayingArt oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimations();
+  }
+
+  void _ensureFloatRunning() {
+    if (_floatCtrl.isAnimating) return;
+    _floatCtrl.repeat();
+  }
+
+  void _ensureGlowRunning() {
+    if (_glowCtrl.isAnimating) return;
+    _glowCtrl.repeat(reverse: true);
+  }
+
+  void _ensureSpinRunning() {
+    if (_spinCtrl.isAnimating) return;
+    _spinCtrl.repeat();
+  }
+
+  void _syncAnimations() {
+    final zen = widget.vinylOpacity > 0;
+    if (zen) {
+      _ensureFloatRunning();
+      _ensureGlowRunning();
+      if (_playing) {
+        _ensureSpinRunning();
       } else {
         _spinCtrl.stop();
       }
-    }, fireImmediately: true);
+    } else {
+      _floatCtrl.stop();
+      _glowCtrl.stop();
+      _spinCtrl.stop();
+    }
   }
 
   @override
@@ -75,7 +112,7 @@ class _NowPlayingArtState extends ConsumerState<NowPlayingArt>
         return Transform.translate(
           offset: Offset(0, math.sin(t) * 7 * v),
           child: Transform.scale(
-            scale: 1.0 + 0.015 * math.sin(t + math.pi / 3),
+            scale: 1.0 + 0.015 * math.sin(t + math.pi / 3) * v,
             child: SizedBox(
               width: coverSize * (1 + 0.55 * v),
               height: coverSize + 24 * v,

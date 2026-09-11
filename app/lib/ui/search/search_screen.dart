@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
@@ -18,11 +19,27 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
+  late final FocusNode _searchFocus = FocusNode(
+    debugLabel: 'search-field',
+    onKeyEvent: _onSearchKey,
+  );
 
   @override
   void dispose() {
     _controller.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      final moved = FocusScope.of(
+        context,
+      ).focusInDirection(TraversalDirection.down);
+      if (moved) return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _submit([String? preset]) {
@@ -46,6 +63,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   Expanded(
                     child: TextField(
                       autofocus: true,
+                      focusNode: _searchFocus,
                       controller: _controller,
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _submit(),
@@ -56,9 +74,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
+                  DpadIconButton(
+                    tooltip: 'Search',
+                    filled: true,
+                    icon: Icons.arrow_forward,
                     onPressed: _submit,
-                    icon: const Icon(Icons.arrow_forward),
                   ),
                 ],
               ),
@@ -110,11 +130,12 @@ class _IdleHome extends ConsumerWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const Spacer(),
-              IconButton(
+              DpadIconButton(
                 tooltip: 'Clear history',
+                iconSize: 20,
+                icon: Icons.delete_outline,
                 onPressed: () =>
                     ref.read(searchHistoryProvider.notifier).clear(),
-                icon: const Icon(Icons.delete_outline, size: 20),
               ),
             ],
           ),

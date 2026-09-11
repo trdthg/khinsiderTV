@@ -38,38 +38,51 @@ class SeekBarState extends State<SeekBar> {
     super.dispose();
   }
 
-  double get _maxMs => widget.duration.inMilliseconds
-      .clamp(1, double.maxFinite.toInt())
-      .toDouble();
+  /// Milliseconds the bar spans, or null while the duration is unknown.
+  /// Returning null (rather than clamping to 1ms) is what keeps the bar from
+  /// rendering as completely full while a track is still buffering.
+  double? get _maxMs {
+    final ms = widget.duration.inMilliseconds;
+    if (ms <= 0) return null;
+    return ms.toDouble();
+  }
+
+  /// Seek relative to the current position, clamped to the loaded duration.
+  void _seekBy(Duration delta) {
+    final maxMs = _maxMs;
+    if (maxMs == null) return;
+    final target = (widget.position + delta).inMilliseconds.clamp(
+      0,
+      maxMs.toInt(),
+    );
+    widget.onSeek(target.toDouble());
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final progress = (widget.position.inMilliseconds / _maxMs).clamp(0.0, 1.0);
+    final maxMs = _maxMs;
+    final progress = maxMs == null
+        ? 0.0
+        : (widget.position.inMilliseconds / maxMs).clamp(0.0, 1.0);
 
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-            widget.onSeek(
-              (widget.position + const Duration(seconds: 10)).inMilliseconds
-                  .clamp(0, _maxMs)
-                  .toDouble(),
-            ),
+            _seekBy(const Duration(seconds: 10)),
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-            widget.onSeek(
-              (widget.position - const Duration(seconds: 10)).inMilliseconds
-                  .clamp(0, _maxMs)
-                  .toDouble(),
-            ),
+            _seekBy(const Duration(seconds: -10)),
       },
       child: Focus(
         focusNode: _focusNode,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapUp: (d) {
+            final maxMs = _maxMs;
+            if (maxMs == null) return; // nothing loaded to seek within
             final box = context.findRenderObject()! as RenderBox;
             final ratio = (d.localPosition.dx / box.size.width).clamp(0.0, 1.0);
-            widget.onSeek(ratio * _maxMs);
+            widget.onSeek(ratio * maxMs);
           },
           child: MouseRegion(
             cursor: SystemMouseCursors.click,

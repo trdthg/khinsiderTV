@@ -17,6 +17,19 @@ import 'state/player_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // just_audio's LockCachingAudioSource can race when a prefetched source is
+  // replaced; the resulting PathNotFoundException is logged as an unhandled
+  // async error even though playback is already continuing on another source.
+  // Keep the page responsive instead of letting that incidental cache race
+  // surface as a crash/dialog.
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    if (error is dart_io.PathNotFoundException) {
+      debugPrint('Ignoring cache-file race: $error');
+      return true;
+    }
+    return false;
+  };
+
   // Apply a pending update extracted in a previous session (desktop only):
   // the files on disk are swapped and THIS session continues as-is — the
   // NEXT launch uses the new version.

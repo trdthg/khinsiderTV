@@ -225,24 +225,23 @@ class _MenuButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final Future<void> Function() onPressed;
+  final VoidCallback onPressed;
   final bool filled;
   final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
-    return DpadTile(
-      focusNode: focusNode,
-      borderRadius: 24,
-      onSelect: () => onPressed(),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: IconButton(
-          iconSize: 28,
-          icon: Icon(icon),
-          onPressed: () => onPressed(),
-        ),
+    return Semantics(
+      label: label,
+      button: true,
+      child: DpadIconButton(
+        focusNode: focusNode,
+        borderRadius: 24,
+        icon: icon,
+        iconSize: 28,
+        filled: filled,
+        tooltip: label,
+        onPressed: onPressed,
       ),
     );
   }

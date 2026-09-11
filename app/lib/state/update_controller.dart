@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../data/update_service.dart';
 
@@ -25,9 +23,8 @@ class UpdateController extends Notifier<UpdateState> {
   Future<void> check() async {
     state = state.copyWith(checking: true);
     try {
-      final info = PackageInfo.fromPlatform();
+      final pkg = await PackageInfo.fromPlatform();
       final service = ref.read(updateServiceProvider);
-      final pkg = await info;
       final available = await service.latestRelease(
         currentVersion: pkg.version,
       );
@@ -45,7 +42,8 @@ class UpdateController extends Notifier<UpdateState> {
   Future<void> download() async {
     final info = state.available;
     if (info == null ||
-        state.downloadPhase == UpdateDownloadPhase.downloading) {
+        state.downloadPhase == UpdateDownloadPhase.downloading ||
+        state.downloadPhase == UpdateDownloadPhase.extracting) {
       return;
     }
     final service = ref.read(updateServiceProvider);
@@ -57,9 +55,7 @@ class UpdateController extends Notifier<UpdateState> {
       downloadProgress: 0,
     );
     try {
-      final base = await getApplicationSupportDirectory();
-      final saveDir = Directory('${base.path}${Platform.pathSeparator}updates');
-      await saveDir.create(recursive: true);
+      final saveDir = await updatesDirectory();
       await service.downloadAsset(
         asset,
         saveDir: saveDir,
@@ -82,9 +78,15 @@ class UpdateController extends Notifier<UpdateState> {
     // apply (at startup or via Restart & update).
     state = state.copyWith(downloadPhase: UpdateDownloadPhase.extracting);
     try {
-      await extractPendingUpdate();
+      // Dropping the zip is intentional: it is unpacked into `pending`, so
+      // keeping the archive would only waste disk (and confuse the "newest
+      // zip wins" rule next time).
+      final pending = await extractPendingUpdate();
       if (!ref.mounted) return;
-      state = state.copyWith(downloadPhase: UpdateDownloadPhase.ready);
+      state = state.copyWith(
+        downloadPhase: UpdateDownloadPhase.ready,
+        downloadedFile: pending?.path,
+      );
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -96,6 +98,8 @@ class UpdateController extends Notifier<UpdateState> {
 
   /// Reset to idle and re-download.
   Future<void> retryDownload() async {
+    // errorMessage: null clears the field (copyWith uses a sentinel for its
+    // nullable arguments), so a stale failure message cannot survive a retry.
     state = state.copyWith(
       downloadPhase: UpdateDownloadPhase.idle,
       errorMessage: null,
@@ -151,22 +155,32 @@ class UpdateState {
 
   bool get showBanner => available != null && !dismissed;
 
+  /// Sentinel: lets [copyWith] tell an explicitly passed `null` apart from
+  /// "leave this field alone", so an error/file can actually be cleared.
+  static const _unset = Object();
+
   UpdateState copyWith({
-    UpdateInfo? available,
+    Object? available = _unset,
     bool? checking,
     bool? dismissed,
     UpdateDownloadPhase? downloadPhase,
     double? downloadProgress,
-    String? downloadedFile,
-    String? errorMessage,
+    Object? downloadedFile = _unset,
+    Object? errorMessage = _unset,
   }) => UpdateState(
-    available: available ?? this.available,
+    available: identical(available, _unset)
+        ? this.available
+        : available as UpdateInfo?,
     checking: checking ?? this.checking,
     dismissed: dismissed ?? this.dismissed,
     downloadPhase: downloadPhase ?? this.downloadPhase,
     downloadProgress: downloadProgress ?? this.downloadProgress,
-    downloadedFile: downloadedFile ?? this.downloadedFile,
-    errorMessage: errorMessage ?? this.errorMessage,
+    downloadedFile: identical(downloadedFile, _unset)
+        ? this.downloadedFile
+        : downloadedFile as String?,
+    errorMessage: identical(errorMessage, _unset)
+        ? this.errorMessage
+        : errorMessage as String?,
   );
 }
 

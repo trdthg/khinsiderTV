@@ -117,10 +117,11 @@ class UpdateService {
       tag.trim().replaceFirst(RegExp('^v'), '');
 
   /// Numeric segment comparison; `1.2.10` > `1.2.9`.
+  ///
+  /// Pre-release (`-rc1`) and build (`+12`) suffixes are stripped so they do
+  /// not silently parse as `0` and invert the comparison.
   static bool _isNewer(String a, String b) {
-    List<int> parse(String v) =>
-        v.split('.').map((p) => int.tryParse(p) ?? 0).toList();
-    final a1 = parse(a), b1 = parse(b);
+    final a1 = _parseVersion(a), b1 = _parseVersion(b);
     final len = a1.length > b1.length ? a1.length : b1.length;
     for (var i = 0; i < len; i++) {
       final x = i < a1.length ? a1[i] : 0;
@@ -128,6 +129,17 @@ class UpdateService {
       if (x != y) return x > y;
     }
     return false;
+  }
+
+  /// `0.1.4-rc1+12` -> `[0, 1, 4]`; unparseable segments become 0.
+  static List<int> _parseVersion(String version) {
+    final core = version
+        .split('-')
+        .first
+        .split('+')
+        .first
+        .replaceAll(RegExp(r'[^0-9.]'), '');
+    return core.split('.').map((p) => int.tryParse(p) ?? 0).toList();
   }
 }
 
@@ -152,6 +164,19 @@ class UpdateAsset {
   final String url;
 }
 
+/// Walks up from [exePath] to the enclosing `.app` bundle, or null when the
+/// binary is not packaged in one (a plain `parent` walk would never stop,
+/// because `Directory('/').parent` is `/` itself).
+Directory? _macOSAppBundle(String exePath) {
+  var dir = File(exePath).parent;
+  while (true) {
+    if (dir.path.endsWith('.app')) return dir;
+    final parent = dir.parent;
+    if (parent.path == dir.path) return null; // reached the filesystem root
+    dir = parent;
+  }
+}
+
 /// The updates working directory (downloads + pending extraction).
 Future<Directory> updatesDirectory() async {
   final base = await getApplicationSupportDirectory();
@@ -160,10 +185,13 @@ Future<Directory> updatesDirectory() async {
   return dir;
 }
 
-/// Extracts the newest downloaded .zip into `updates/pending`.
+/// Extracts the newest downloaded .zip into `<root>/pending`.
+///
+/// [root] defaults to [updatesDirectory]; it is injectable so the
+/// extraction logic (and its path-traversal guard) can be unit-tested.
 /// Returns the pending directory, or null when there is nothing to extract.
-Future<Directory?> extractPendingUpdate() async {
-  final dir = await updatesDirectory();
+Future<Directory?> extractPendingUpdate({Directory? root}) async {
+  final dir = root ?? await updatesDirectory();
   final zips =
       dir
           .listSync()
@@ -184,7 +212,9 @@ Future<Directory?> extractPendingUpdate() async {
   final bytes = await zips.first.readAsBytes();
   final archive = ZipDecoder().decodeBytes(bytes);
   for (final entry in archive) {
-    final outPath = '${pending.path}${Platform.pathSeparator}${entry.name}';
+    final name = _safeEntryName(entry.name);
+    if (name == null) continue; // traversal / absolute path: skip
+    final outPath = '${pending.path}${Platform.pathSeparator}$name';
     if (entry.isFile) {
       final out = File(outPath);
       await out.parent.create(recursive: true);
@@ -196,6 +226,25 @@ Future<Directory?> extractPendingUpdate() async {
   // The downloaded zip is no longer needed.
   await zips.first.delete();
   return pending;
+}
+
+/// Resolves [name] inside the extraction root, or null if it would escape.
+///
+/// Archive entries are attacker-controlled: a zip shipped as a release asset
+/// must never be able to write outside the extraction directory (Zip Slip).
+String? _safeEntryName(String name) {
+  // Normalise separators so Windows-style entries are handled identically.
+  final normalised = name.replaceAll('\\', '/');
+  final segments = <String>[];
+  for (final seg in normalised.split('/')) {
+    if (seg.isEmpty || seg == '.') continue;
+    if (seg == '..') return null; // parent traversal
+    segments.add(seg);
+  }
+  if (segments.isEmpty) return null;
+  // Absolute paths (leading drive letter / root) are rejected above only if
+  // they traverse; strip any leading root here to stay inside the sandbox.
+  return segments.join(Platform.pathSeparator);
 }
 
 /// Applies a pending update extracted in a previous session. Called at app
@@ -215,13 +264,15 @@ Future<bool> applyPendingUpdate() async {
     final appBundle = pending
         .listSync(recursive: true)
         .whereType<Directory>()
-        .firstWhere((d) => d.path.endsWith('.app'));
-    var cur = File(exePath).parent; // .../Contents/MacOS
-    while (!cur.path.endsWith('.app')) {
-      cur = cur.parent;
+        .where((d) => d.path.endsWith('.app'))
+        .toList();
+    final target = _macOSAppBundle(exePath);
+    if (appBundle.isEmpty || target == null) {
+      // Not a packaged .app (dev build / bare binary): cannot self-swap.
+      return false;
     }
-    await Process.run('rm', ['-rf', cur.path]);
-    await Process.run('cp', ['-R', appBundle.path, cur.parent.path]);
+    await Process.run('rm', ['-rf', target.path]);
+    await Process.run('cp', ['-R', appBundle.first.path, target.parent.path]);
     await pending.delete(recursive: true);
     return true;
   }
@@ -316,14 +367,13 @@ del "%~f0"
     final appBundle = pending
         .listSync(recursive: true)
         .whereType<Directory>()
-        .firstWhere((d) => d.path.endsWith('.app'));
-    var cur = File(Platform.resolvedExecutable).parent;
-    while (!cur.path.endsWith('.app')) {
-      cur = cur.parent;
-    }
-    await Process.run('rm', ['-rf', cur.path]);
-    await Process.run('cp', ['-R', appBundle.path, cur.parent.path]);
-    await Process.run('open', ['-n', cur.path]);
+        .where((d) => d.path.endsWith('.app'))
+        .toList();
+    final target = _macOSAppBundle(Platform.resolvedExecutable);
+    if (appBundle.isEmpty || target == null) return;
+    await Process.run('rm', ['-rf', target.path]);
+    await Process.run('cp', ['-R', appBundle.first.path, target.parent.path]);
+    await Process.run('open', ['-n', target.path]);
     exit(0);
   }
 

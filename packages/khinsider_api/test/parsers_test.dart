@@ -131,4 +131,49 @@ void main() {
       expect(KhinsiderClient.albumBasePath, '/game-soundtracks/album');
     });
   });
+  group('malformed / unexpected markup must not crash the parser', () {
+    test('search row with a single <td> and no albumIcon cell', () {
+      final html = """
+      <table class="albumList">
+        <tr><th>Icon</th><th>Title</th></tr>
+        <tr><td><img src="/thumbs/x.jpg"></td></tr>
+      </table>""";
+      expect(KhinsiderParsers.parseSearchResults(html), isEmpty);
+    });
+
+    test('search row with no <td> at all', () {
+      final html = '<table class="albumList"><tr></tr></table>';
+      expect(KhinsiderParsers.parseSearchResults(html), isEmpty);
+    });
+
+    test('valid rows are still parsed alongside malformed ones', () {
+      final html = """
+      <table class="albumList">
+        <tr><th>Icon</th><th>Title</th></tr>
+        <tr><td></td></tr>
+        <tr>
+          <td class="albumIcon"><a href="/game-soundtracks/album/ok.html"><img src="/t.jpg"></a></td>
+          <td><a href="/game-soundtracks/album/ok.html">OK Album</a></td>
+          <td><a>DS</a></td><td>Soundtrack</td><td>2009</td>
+        </tr>
+      </table>""";
+      final rows = KhinsiderParsers.parseSearchResults(html);
+      expect(rows, hasLength(1));
+      expect(rows.single.id, 'ok.html');
+      expect(rows.single.title, 'OK Album');
+    });
+  });
+
+  group('album page placeholder summary', () {
+    test(
+      'an album page without a summary yields a blank id, not a bogus path',
+      () {
+        final html =
+            '<h2>Some Album</h2><table id="songlist"><tr><th>#</th></tr></table>';
+        final album = KhinsiderParsers.parseAlbumPage(html);
+        expect(album.summary.id, isNot(contains('/')));
+        expect(album.summary.title, 'Some Album');
+      },
+    );
+  });
 }

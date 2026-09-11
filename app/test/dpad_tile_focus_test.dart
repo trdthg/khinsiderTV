@@ -7,8 +7,9 @@ import 'package:khinsider/core/widgets/dpad_tile.dart';
 /// row left focus on the autofocused first row, so Enter/Space always
 /// re-activated the FIRST item instead of the clicked one.
 void main() {
-  testWidgets('clicking a tile moves focus; Enter activates the clicked tile',
-      (tester) async {
+  testWidgets('clicking a tile moves focus; Enter activates the clicked tile', (
+    tester,
+  ) async {
     final activated = <int>[];
 
     await tester.pumpWidget(
@@ -44,8 +45,12 @@ void main() {
 
     // Tap activates tile 2 (plays it); focus moved there, so Enter
     // re-activates tile 2 — NOT the autofocused tile 0.
-    expect(activated, [2, 2],
-        reason: 'Enter must activate the clicked tile, not the autofocused '
-            'first one');
+    expect(
+      activated,
+      [2, 2],
+      reason:
+          'Enter must activate the clicked tile, not the autofocused '
+          'first one',
+    );
   });
 }

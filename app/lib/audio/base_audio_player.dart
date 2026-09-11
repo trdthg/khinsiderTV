@@ -12,6 +12,8 @@ class PlayableItem {
     this.artist,
     this.albumTitle,
     this.artUri,
+    this.albumId = '',
+    this.trackIndex,
   });
 
   /// Stable identity, e.g. `<albumId>/<trackIndex>`.
@@ -24,6 +26,13 @@ class PlayableItem {
 
   final String? artist;
   final String? albumTitle;
+
+  /// Album id and 1-based track number. Together with [albumTitle] they
+  /// decide **where** the track is cached on disk, and let the UI report the
+  /// cache state of a track before its media URL has even been resolved.
+  final String albumId;
+  final int? trackIndex;
+
   final Uri? artUri;
 }
 
