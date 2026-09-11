@@ -104,7 +104,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       // The favorite button must exist…
       final buttonFinder = find.byType(FilledButton);
@@ -122,7 +124,9 @@ void main() {
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
-      await tester.pumpAndSettle();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
     }
   });
 
@@ -172,7 +176,9 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.text('Details'), findsOneWidget);
     expect(find.text('PC-98'), findsOneWidget);
@@ -183,7 +189,9 @@ void main() {
 
     // Related row sits at the end of the (lazy) track list — scroll to it.
     await tester.drag(find.byType(ListView).first, const Offset(0, -20000));
-    await tester.pumpAndSettle();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.text('People who viewed this also viewed'), findsOneWidget);
     expect(find.text('KIMAGURE ORANGE☆ROAD Loving Heart'), findsOneWidget);
   });

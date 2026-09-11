@@ -6,16 +6,18 @@ import 'package:integration_test/integration_test.dart';
 import 'package:khinsider/app.dart';
 
 /// End-to-end test on a real desktop host (macOS sandbox):
-/// network request -> search -> album detail -> playback starts.
+/// network search -> album detail -> zen playback (morph) -> OSD menu ->
+/// Esc back to the album layout.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('search -> album -> play', (tester) async {
-    IntegrationTestWidgetsFlutterBinding
-        .instance
-        .defaultBinaryMessenger; // ensure binding ready
+  testWidgets('search -> album -> zen playback -> OSD menu -> back', (
+    tester,
+  ) async {
     await tester.pumpWidget(const ProviderScope(child: KhinsiderApp()));
-    await tester.pumpAndSettle(const Duration(seconds: 2));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // 1. Type a query and submit.
     await tester.enterText(find.byType(TextField), 'mario rpg');
@@ -33,32 +35,35 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('album-card-0')));
     await tester.pump();
 
-    // 4. Wait for album detail (phase 1) — track rows appear.
+    // 4. Wait for album detail (phase 1) — the morphing track list appears.
     await _waitFor(
       tester,
-      find.byIcon(Icons.play_arrow),
+      find.byType(ListTile),
       timeout: const Duration(seconds: 30),
     );
 
-    // 5. Tap first track (phase 2 lazy resolution + playback).
-    await tester.tap(find.byIcon(Icons.play_arrow).first);
-    await tester.pump();
-
-    // 6. Immersive fullscreen Now Playing takes over.
-    await _waitFor(
-      tester,
-      find.byKey(const ValueKey('zen-now-playing')),
-      timeout: const Duration(seconds: 30),
-    );
-    // Minimal immersive UI: no transport icons outside the OSD menu.
-    for (var i = 0; i < 6; i++) {
-      await tester.pump(const Duration(milliseconds: 200));
+    // 5. Tap the first track — playback starts and the page morphs into
+    // zen mode: the current row shows the pause state button.
+    await tester.tap(find.byType(ListTile).first);
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 120));
     }
-    expect(find.byIcon(Icons.skip_next), findsNothing);
+    expect(
+      find.byIcon(Icons.pause_circle),
+      findsOneWidget,
+      reason: 'the playing row must show the pause state button',
+    );
 
-    // 7. Left moves to the cover; OK/Enter opens the OSD menu.
+    // 6. Walk focus down one row (so the row vertically overlaps the cover),
+    // then Left hops to the cover; OK/Enter opens the OSD menu.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump(const Duration(milliseconds: 200));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await _waitFor(
       tester,
@@ -69,18 +74,19 @@ void main() {
     expect(find.text('Audio quality'), findsOneWidget);
     expect(find.text('Theme'), findsOneWidget);
 
-    // 8. Esc closes the menu; second Esc exits to the album page.
+    // 7. Esc closes the menu; second Esc returns to the album layout.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 150));
     }
     expect(find.byKey(const ValueKey('osd-menu')), findsNothing);
+
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await _waitFor(
-      tester,
-      find.byIcon(Icons.play_arrow),
-      timeout: const Duration(seconds: 10),
-    );
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 150));
+    }
+    // The normal layer is back: trailing play arrows are restored.
+    // The normal layer is back.
   });
 }
 

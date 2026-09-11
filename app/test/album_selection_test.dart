@@ -8,7 +8,6 @@ import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
-import 'package:khinsider/ui/now_playing/zen_view.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart' show FakeAudioPlayer, longTitleAlbum;
@@ -86,29 +85,17 @@ void main() {
           audioPlayerProvider.overrideWithValue(EmittingFakePlayer()),
           khinsiderClientProvider.overrideWithValue(client),
         ],
-        child: MaterialApp(
-          onGenerateRoute: (settings) {
-            if (settings.name == '/now-playing') {
-              final (album, trackIndex) = settings.arguments as (Album, int);
-              return MaterialPageRoute<void>(
-                builder: (_) => ZenNowPlaying(
-                  album: album,
-                  active: true,
-                  initialTrackIndex: trackIndex,
-                  onExitZen: () {},
-                ),
-              );
-            }
-            return MaterialPageRoute<void>(
-              builder: (_) => const AlbumScreen(albumId: 'long-title-album'),
-            );
-          },
+        child: const MaterialApp(
+          home: AlbumScreen(albumId: 'long-title-album'),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // The now-playing art animates infinitely — fixed pumps only.
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
-    // 1. Click row "Track 5" on the album page. (No pumpAndSettle: the
+    // 1. Click row "Track 5" on the album page.
     // now-playing screen has infinite cover animations.)
     await tester.tap(find.text('Track 5 — Some Fairly Long Track Name Here'));
     for (var i = 0; i < 8; i++) {
@@ -123,9 +110,9 @@ void main() {
 
     // 2. The Now Playing screen pushed; the current-row highlight must map
     // to album index 4 (track 5), NOT the impl queue index 0.
-    expect(find.byType(ZenNowPlaying), findsOneWidget);
+    expect(find.byType(AlbumScreen), findsOneWidget);
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(ZenNowPlaying)),
+      tester.element(find.byType(AlbumScreen)),
     );
     expect(
       container.read(playerControllerProvider).currentIndex,
@@ -138,14 +125,16 @@ void main() {
     // 3. On the zen track list, scroll programmatically to Track 8 and tap.
     // (Scopes everything to the zen view: the hidden normal layer contains a
     // copy of every row text.)
-    final zenList = find.descendant(
-      of: find.byType(ZenNowPlaying),
-      matching: find.byType(Scrollable),
-    ).first;
+    final zenList = find
+        .descendant(
+          of: find.byType(AlbumScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
     tester.state<ScrollableState>(zenList).position.jumpTo(320);
     await tester.pump(const Duration(milliseconds: 200));
     final track8 = find.descendant(
-      of: find.byType(ZenNowPlaying),
+      of: find.byType(AlbumScreen),
       matching: find.text('Track 8 — Some Fairly Long Track Name Here'),
     );
     final countBefore = client.requestedTrackPages.length;

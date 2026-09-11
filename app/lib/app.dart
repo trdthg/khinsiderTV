@@ -7,7 +7,6 @@ import 'core/theme.dart';
 import 'ui/shared/update_banner.dart';
 import 'state/theme_controller.dart';
 import 'ui/album/album_screen.dart';
-import 'ui/now_playing/now_playing_screen.dart';
 import 'ui/search/search_screen.dart';
 
 class KhinsiderApp extends ConsumerWidget {
@@ -22,35 +21,11 @@ class KhinsiderApp extends ConsumerWidget {
       title: 'KHInsider',
       theme: AppTheme.dark(seed: seed),
       onGenerateRoute: (settings) {
+        debugPrint('E2E: route ${settings.name} args ${settings.arguments}');
         if (settings.name == '/album') {
           final album = settings.arguments as AlbumSummary;
           return MaterialPageRoute<void>(
             builder: (_) => AlbumScreen(albumId: album.id),
-          );
-        }
-        if (settings.name == '/now-playing') {
-          final (album, trackIndex) = settings.arguments as (Album, int);
-          return PageRouteBuilder<void>(
-            settings: settings,
-            opaque: true,
-            transitionDuration: const Duration(milliseconds: 280),
-            pageBuilder: (_, _, _) =>
-                NowPlayingScreen(album: album, initialTrackIndex: trackIndex),
-            transitionsBuilder: (_, animation, _, child) => FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOut,
-              ),
-              child: ScaleTransition(
-                scale: Tween(begin: 0.96, end: 1.0).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-                child: child,
-              ),
-            ),
           );
         }
         return MaterialPageRoute<void>(builder: (_) => const SearchScreen());
