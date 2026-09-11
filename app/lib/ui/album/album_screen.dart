@@ -210,11 +210,18 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
     return Focus(
       canRequestFocus: false,
       onKeyEvent: (node, event) {
-        if (widget.zen &&
-            event is KeyDownEvent &&
+        if (event is KeyDownEvent &&
             (event.logicalKey == LogicalKeyboardKey.escape ||
                 event.logicalKey == LogicalKeyboardKey.gameButtonB)) {
-          widget.menuOpen ? widget.onToggleMenu() : widget.onExitZen();
+          if (widget.zen) {
+            // Zen mode: menu open -> close it; otherwise exit zen.
+            widget.menuOpen ? widget.onToggleMenu() : widget.onExitZen();
+          } else {
+            // Normal album page: go back to the search screen.
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
