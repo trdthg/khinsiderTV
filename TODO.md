@@ -237,3 +237,56 @@
       播放中一律 `ready` —— 宁可少一个转圈，也不能让「暂停」这个最需要的按钮消失。
       回归测试：`media_session_test.dart`「never advertises buffering while the track
       is playing」（变异验证：把条件改回 `snap.processing` 立刻变红）。
+
+## G. 系统集成（用户反馈第五轮：通知栏 / macOS / 缓存目录）
+
+- [x] **G1 安卓 13/14/15 通知栏只剩封面+标题+进度条，一个按钮都没有**
+      这次不是我们的 `PlaybackState` 有问题（`controls`、`playing`、`queueIndex`、
+      `androidCompactActionIndices` 都是对的），而是 audio_service 的一个上游 bug 撞上了
+      SystemUI 的第二条代码路径。SystemUI 画媒体卡片有两条路：
+      1. **语义 actions**（AOSP 13+ 默认）：`MediaDataManager.createActionsFromState()` 从
+         `PlaybackState.actions` 推导按钮，`MediaControlPanel.setSemanticButton` 判定
+         `showInCompact = SEMANTIC_ACTIONS_COMPACT.contains(buttonId)` —— 与通知无关；
+      2. **通知 actions**（回落到这条时）：按钮列表来自通知的 actions，
+         而**折叠卡片**是否显示由 `setGenericButton(..., showInCompact)` 决定，
+         `showInCompact` 又来自 `MediaDataManager` 读的
+         `notif.extras.getIntArray(Notification.EXTRA_COMPACT_ACTIONS)`。
+      这个 extra 只有 `MediaStyle.setShowActionsInCompactView()` 会写（AOSP 14 的
+      `Notification.MediaStyle.addExtras` 仍在写，不是 no-op），而 audio_service 0.18.19
+      （pub 上最新版）**只在 `Build.VERSION.SDK_INT < 33` 时调用它** —— 于是走第 2 条路径的
+      设备（各 OEM 的 SystemUI 分支）在 Android 13+ 上折叠卡片一个按钮都没有，
+      展开才看得到。这也解释了「只有进度条」：卡片底部的进度条/时长来自 metadata 的
+      duration，与 actions 无关。
+      修法：仓库内 vendored 一份 `packages/audio_service`（0.18.19，`app/pubspec.yaml` 用
+      `dependency_overrides` 指过去），把那句改成**无条件调用**，并按实际 action 数量
+      裁剪/过滤下标（框架对越界下标会抛 `IllegalArgumentException`）。
+      语义路径上多一个 extra 完全无副作用，所以两条路径都安全。
+- [x] **G2 macOS release 版一直转圈、不出声（有缓存也一样）**
+      根因是签名权限：`app/macos/Runner/Release.entitlements` 里有 `network.client`、
+      `assets.music.read-write`，但**没有 `com.apple.security.network.server`**。
+      just_audio 的 `StreamAudioSource._onLoad()` 无条件
+      `ensureRunning()` 起一个本地 HTTP 代理，而本应用播的 `LockCachingAudioSource`
+      正是 `StreamAudioSource` —— 沙箱应用没有那个 entitlement 就不能监听 socket，
+      于是一个字节都收不到：UI 永远停在 loading，缓存与否都一样。
+      Flutter 模板的 `DebugProfile.entitlements` 里恰好有这个键，所以
+      `flutter run`（debug）正常、从 GitHub 下载的 `.dmg/.zip`（release）不正常 —— 与反馈完全一致。
+      修法：给 `Release.entitlements` 补上该键（附注释说明原因）。
+- [x] **G3 安卓缓存目录改成公开的 `Music/`**
+      以前安卓/iOS 都写 `getApplicationDocumentsDirectory()`（应用私有目录，文件管理器里很难找）。
+      Android 11+ 分区存储下想写公开 `Music/` 只有一条实用路径：`MANAGE_EXTERNAL_STORAGE`
+      （「所有文件访问」，一个系统设置页里的开关，不是运行时弹窗；本应用是 GitHub 侧载，
+      不受 Play 政策限制），因此：
+      * `MainActivity` 新增 `dev.khinsider/storage` channel：`canWritePublicMusic`（API 30+ 用
+        `Environment.isExternalStorageManager()`；≤29 用 `WRITE_EXTERNAL_STORAGE` 运行时权限）、
+        `publicMusicPath()`、`requestAllFilesAccess()`（跳 `ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`）；
+      * Manifest 加 `MANAGE_EXTERNAL_STORAGE` + `WRITE_EXTERNAL_STORAGE(maxSdkVersion=29)`
+        + `requestLegacyExternalStorage`（Android 10 及以下）；
+      * `AudioCacheManager` 先问 `AndroidStorage`：授权了 root 就是 `Music/KHInsider`，
+        没授权仍是私有目录（功能不受影响，只是文件不好找）；`forgetRoot()` 让授权后
+        **不用重启**，下次写入自动切到新目录（已下载的文件留在旧目录）；
+      * UI 只做「解释 + 跳转」：首次启动问一次（`PublicMusicPrompt`，持久化标记），
+        专辑页缓存目录行再给一个按钮（**只在手机窄屏布局出现**，宽屏桌面/TV 布局不变）；
+      * `main.dart` 把唯一的 `AudioCacheManager` 同时给 `JustAudioPlayerImpl` 和
+        `audioCacheManagerProvider`（原来播放器和 UI 各有一个实例，`forgetRoot()` 只会影响一半）。
+      回归测试：`audio_cache_manager_test.dart`「Android public Music folder」一组 4 条
+      （授权后用 Music、未授权用私有目录、`forgetRoot()` 后重新解析、pin 住的 root 不被清掉）。

@@ -14,7 +14,9 @@ khinsider/
 │       ├── audio/              # BaseAudioPlayer · just_audio · media session · cache
 │       ├── state/              # Riverpod controllers (search/album/player/theme)
 │       └── ui/                 # search/ · album/ · now_playing/ · shared/
-└── packages/khinsider_api/     # Pure Dart: dio + html parser & data API
+├── packages/khinsider_api/     # Pure Dart: dio + html parser & data API
+└── packages/audio_service/     # Vendored audio_service 0.18.19 + one Android patch
+                                #   (compact notification actions, see ARCHITECTURE.md)
 ```
 
 ## Architecture
