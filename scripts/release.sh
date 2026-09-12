@@ -85,8 +85,18 @@ case "$main" in
     [[ "$DRY_RUN" == 1 ]] && exit 0
 
     # Bump version in pubspec (keep the +build suffix pattern).
-    sed -i.bak -E "0,/^version:[[:space:]]*.*/s//version: $NEW+$BUILD/" "$VERSION_FILE"
-    rm -f "$VERSION_FILE.bak"
+    #
+    # awk rather than `sed -i`: the GNU-only `0,/re/` address used to be here,
+    # and BSD/macOS sed parses it as a no-op — the version silently stayed put
+    # and the release commit came out empty. This replaces the first
+    # `version:` line and leaves every other byte alone.
+    awk -v v="$NEW+$BUILD" '
+      !found && /^version:/ { print "version: " v; found = 1; next }
+      { print }
+    ' "$VERSION_FILE" > "$VERSION_FILE.tmp"
+    mv "$VERSION_FILE.tmp" "$VERSION_FILE"
+    grep -q "^version: $NEW+$BUILD\$" "$VERSION_FILE" ||
+      { echo "ERROR: version bump failed ($VERSION_FILE)"; exit 1; }
 
     git add "$VERSION_FILE"
     git commit -m "chore(release): $TAG"
