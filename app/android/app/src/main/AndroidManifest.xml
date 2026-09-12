@@ -6,6 +6,19 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- The download cache goes into the public Music folder (see
+         AudioCacheManager + the "dev.khinsider/storage" channel in
+         MainActivity). Android 11+ only allows that with "all files access",
+         which the user grants on a system settings screen; when it is not
+         granted the app keeps its cache in its own documents folder. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage"/>
+    <!-- Android 10 and below reach the same folder with the classic storage
+         permission instead (requested at runtime). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
 
     <!-- TV: app runs on Android TV / TV boxes without touchscreen. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -16,6 +29,7 @@
         android:label="KHInsider"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"

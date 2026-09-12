@@ -4,6 +4,7 @@ import 'package:khinsider_api/khinsider_api.dart';
 
 import 'core/keyboard/global_media_keys.dart';
 import 'core/theme.dart';
+import 'ui/shared/public_music.dart';
 import 'ui/shared/update_banner.dart';
 import 'state/theme_controller.dart';
 import 'ui/album/album_screen.dart';
@@ -41,6 +42,8 @@ class KhinsiderApp extends ConsumerWidget {
         child: Column(
           children: [
             const UpdateBanner(),
+            // Android only, asked once: offer the public Music folder.
+            PublicMusicPrompt(navigatorKey: khinsiderNavigatorKey),
             Expanded(child: child ?? const SizedBox.shrink()),
           ],
         ),

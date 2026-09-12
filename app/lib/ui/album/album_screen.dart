@@ -13,6 +13,7 @@ import '../../state/track_cache_controller.dart';
 import '../../state/album_controller.dart';
 import '../../state/player_controller.dart';
 import '../now_playing/now_playing_art.dart';
+import '../shared/public_music.dart';
 import '../now_playing/osd_menu.dart';
 import 'album_metadata.dart';
 import 'album_track_list.dart';
@@ -695,8 +696,13 @@ class _MobileAlbumHeader extends ConsumerWidget {
                   const SizedBox(height: 8),
                   // The cache-folder hint lives in here (collapsed by
                   // default) so the phone header stays short; the desktop
-                  // side panel shows it inline as before.
-                  _CacheFolderHint(albumId: album.summary.id),
+                  // side panel shows it inline as before. Only this (phone)
+                  // layout offers the Android public-Music-folder switch, so
+                  // the wide desktop/TV layout is untouched.
+                  _CacheFolderHint(
+                    albumId: album.summary.id,
+                    offerPublicMusic: true,
+                  ),
                 ],
               ),
             ),
@@ -753,9 +759,17 @@ class _FavoriteButton extends ConsumerWidget {
 /// (`Music/KHInsider/<Album>/mp3|flac|image|other`), so the user can find,
 /// export, delete or play them with another player.
 class _CacheFolderHint extends ConsumerWidget {
-  const _CacheFolderHint({required this.albumId});
+  const _CacheFolderHint({
+    required this.albumId,
+    this.offerPublicMusic = false,
+  });
 
   final String albumId;
+
+  /// Whether this layout may offer to store the cache in the system `Music/`
+  /// folder. Only the phone layout sets it: the wide desktop/TV layout keeps
+  /// its current look (there the one-off [PublicMusicPrompt] is the way in).
+  final bool offerPublicMusic;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -764,6 +778,9 @@ class _CacheFolderHint extends ConsumerWidget {
     final path = cache.folderPath;
     final scheme = Theme.of(context).colorScheme;
     final text = path ?? 'Played tracks are saved to Music/KHInsider';
+    final canRelocate =
+        offerPublicMusic &&
+        ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
@@ -792,6 +809,13 @@ class _CacheFolderHint extends ConsumerWidget {
               ),
             ),
           ),
+          if (canRelocate)
+            DpadIconButton(
+              tooltip: 'Save the cache in the system Music folder',
+              iconSize: 16,
+              icon: Icons.drive_file_move_outlined,
+              onPressed: () => offerPublicMusicFolder(context, ref),
+            ),
           DpadIconButton(
             tooltip: 'Copy cache folder path',
             iconSize: 16,

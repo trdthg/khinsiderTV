@@ -8,11 +8,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'audio/audio_cache_manager.dart';
+import 'audio/audio_service_handler.dart';
 import 'audio/base_audio_player.dart';
 import 'audio/just_audio_player_impl.dart';
-import 'audio/audio_service_handler.dart';
 import 'data/update_service.dart';
 import 'state/player_controller.dart';
+import 'state/track_cache_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,9 +50,15 @@ Future<void> main() async {
   // D-Pad / A / B map to arrows / select / back on TV boxes.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+  // The one cache manager for the whole app: the UI (cache badges, the
+  // "cached in ..." hint) and the player must agree on the cache root, and
+  // `forgetRoot()` (used after the user grants all-files access on Android)
+  // has to apply to both.
+  final AudioCacheManager cache = AudioCacheManager();
+
   // The transport every play/pause/queue command goes to. It is created first
   // because the media session (below) mirrors it.
-  final BaseAudioPlayer transport = JustAudioPlayerImpl();
+  final BaseAudioPlayer transport = JustAudioPlayerImpl(cacheManager: cache);
 
   // Media session (macOS Now-Playing / media keys, Android notification &
   // lock-screen controls). audio_service only ships platform channels for
@@ -103,6 +111,7 @@ Future<void> main() async {
       overrides: [
         audioPlayerProvider.overrideWithValue(transport),
         mediaSessionProvider.overrideWithValue(session),
+        audioCacheManagerProvider.overrideWithValue(cache),
       ],
       child: const KhinsiderApp(),
     ),

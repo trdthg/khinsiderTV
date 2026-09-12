@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khinsider/audio/android_storage.dart';
 import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider_api/khinsider_api.dart';
@@ -242,4 +244,124 @@ void main() {
     await cache.clear();
     expect(await cache.totalSize(), 0);
   });
+
+  group('Android public Music folder', () {
+    late Directory docs;
+    late Directory music;
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      docs = await tempRoot();
+      music = await tempRoot();
+      // The Android branch falls back to the app documents folder while
+      // all-files access is missing; that goes through path_provider.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            (call) async => switch (call.method) {
+              'getApplicationDocumentsDirectory' => docs.path,
+              'getApplicationSupportDirectory' => docs.path,
+              _ => null,
+            },
+          );
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            null,
+          );
+    });
+
+    test('is used once all-files access is granted', () async {
+      final storage = FakeAndroidStorage(music.path);
+      final cache = AudioCacheManager(androidStorage: storage, isAndroid: true);
+
+      expect(cache.supportsPublicMusicFolder, isTrue);
+      expect(await cache.isUsingPublicMusicFolder, isFalse);
+
+      storage.granted = true;
+      final root = await cache.root();
+      expect(root.path, '${music.path}${Platform.pathSeparator}KHInsider');
+      expect(await cache.isUsingPublicMusicFolder, isTrue);
+      // The Music folder itself is created on demand.
+      expect(await root.exists(), isTrue);
+      expect(storage.requests, 0);
+    });
+
+    test('needs no permission and stays private elsewhere', () async {
+      final storage = FakeAndroidStorage(music.path)..granted = true;
+      final desktop = AudioCacheManager(
+        rootOverride: docs,
+        androidStorage: storage,
+        isAndroid: false,
+      );
+      // A non-Android build has no public music folder to switch to.
+      expect(desktop.supportsPublicMusicFolder, isFalse);
+      expect(await desktop.isUsingPublicMusicFolder, isFalse);
+    });
+
+    test('forgetRoot re-resolves after the grant, without a restart', () async {
+      final storage = FakeAndroidStorage(music.path);
+      final cache = AudioCacheManager(androidStorage: storage, isAndroid: true);
+
+      // Resolved before the user granted anything: still the private folder.
+      final first = await cache.root();
+      expect(first.path, isNot(startsWith(music.path)));
+
+      storage.granted = true;
+      expect(
+        await cache.root().then((d) => d.path),
+        first.path,
+        reason: 'the resolved root is memoized until it is forgotten',
+      );
+
+      cache.forgetRoot();
+      expect(
+        await cache.root().then((d) => d.path),
+        '${music.path}${Platform.pathSeparator}KHInsider',
+      );
+    });
+
+    test('requestPublicMusicAccess asks the platform', () async {
+      final storage = FakeAndroidStorage(music.path);
+      final cache = AudioCacheManager(androidStorage: storage, isAndroid: true);
+
+      await cache.requestPublicMusicAccess();
+      expect(storage.requests, 1);
+
+      // A pinned root (tests) must never be forgotten.
+      final pinned = AudioCacheManager(
+        rootOverride: music,
+        androidStorage: storage,
+        isAndroid: true,
+      );
+      await pinned.requestPublicMusicAccess();
+      pinned.forgetRoot();
+      expect(await pinned.root().then((d) => d.path), music.path);
+    });
+  });
+}
+
+/// Drives [AudioCacheManager]'s Android branch off-device.
+class FakeAndroidStorage implements AndroidStorage {
+  FakeAndroidStorage(this.musicPath);
+
+  final String musicPath;
+
+  /// Whether the user has granted "all files access".
+  bool granted = false;
+
+  /// How often the settings screen was requested.
+  int requests = 0;
+
+  @override
+  Future<bool> canWritePublicMusic() async => granted;
+
+  @override
+  Future<String?> publicMusicPath() async => musicPath;
+
+  @override
+  Future<void> requestAllFilesAccess() async => requests++;
 }

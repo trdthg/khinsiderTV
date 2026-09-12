@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'android_storage.dart';
 import 'base_audio_player.dart';
 
 /// Where the user-visible cache lives.
@@ -35,7 +36,12 @@ import 'base_audio_player.dart';
 class AudioCacheManager {
   // Private field, so an initializing formal is not possible here.
   // ignore: prefer_initializing_formals
-  AudioCacheManager({Directory? rootOverride}) {
+  AudioCacheManager({
+    Directory? rootOverride,
+    AndroidStorage? androidStorage,
+    bool? isAndroid,
+  }) : _androidStorage = androidStorage ?? const MethodChannelAndroidStorage(),
+       _isAndroid = isAndroid ?? Platform.isAndroid {
     if (rootOverride != null) {
       _rootOverride = rootOverride;
       _resolvedRoot = rootOverride;
@@ -45,6 +51,13 @@ class AudioCacheManager {
   /// Test / advanced-use escape hatch: pin the cache root instead of resolving
   /// the system music folder.
   Directory? _rootOverride;
+
+  /// Android "all files access" + the platform music directory.
+  final AndroidStorage _androidStorage;
+
+  /// Injected for tests; Android needs its own root resolution because scoped
+  /// storage hides `Music/` behind a special permission.
+  final bool _isAndroid;
 
   Directory? _resolvedRoot;
 
@@ -115,6 +128,7 @@ class AudioCacheManager {
   }
 
   Future<Directory?> _resolveRoot() async {
+    if (_isAndroid) return _resolveAndroidRoot();
     if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
       final home =
           Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
@@ -125,11 +139,61 @@ class AudioCacheManager {
       }
       return Directory('$home${_sep}Music');
     }
-    // Android / iOS: the public music folder is not writable without
-    // MediaStore plumbing, so keep the cache in the app's own documents dir
-    // (still browsable via the system file manager / Files app).
-    final docs = await getApplicationDocumentsDirectory();
-    return docs;
+    // iOS: the app documents folder is the only place the Files app exposes
+    // without MediaStore / photo-library plumbing.
+    return getApplicationDocumentsDirectory();
+  }
+
+  /// Android: use the public `Music/` folder when the user granted all-files
+  /// access, otherwise fall back to the app documents folder (scoped storage
+  /// would make writes into `Music/` fail, or worse, silently land in a
+  /// redirected per-app view).
+  Future<Directory?> _resolveAndroidRoot() async {
+    try {
+      if (!await _androidStorage.canWritePublicMusic()) {
+        return getApplicationDocumentsDirectory();
+      }
+      final music = await _androidStorage.publicMusicPath();
+      if (music == null || music.isEmpty) {
+        return getApplicationDocumentsDirectory();
+      }
+      return Directory(music);
+    } on Exception {
+      return getApplicationDocumentsDirectory();
+    }
+  }
+
+  /// Whether the public music folder can be offered at all (Android only).
+  bool get supportsPublicMusicFolder => _isAndroid;
+
+  /// Opens the Android all-files-access screen. No-op on other platforms.
+  Future<void> requestPublicMusicAccess() =>
+      _androidStorage.requestAllFilesAccess();
+
+  /// Whether the cache currently lives in the system music folder.
+  Future<bool> get isUsingPublicMusicFolder async {
+    if (!_isAndroid) return false;
+    try {
+      if (!await _androidStorage.canWritePublicMusic()) return false;
+      final music = await _androidStorage.publicMusicPath();
+      if (music == null || music.isEmpty) return false;
+      final dir = _resolvedRoot ?? await root();
+      return dir.path == '${Directory(music).path}$_sep$appFolderName';
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// Forgets the memoized root so the next [root] call resolves it again.
+  ///
+  /// Used after the user grants all-files access: the cache then moves to
+  /// `Music/KHInsider` on the next write. Files already downloaded stay in the
+  /// old folder (they remain playable from the file manager); the caller can
+  /// point that out to the user.
+  void forgetRoot() {
+    if (_rootOverride != null) return;
+    _resolvedRoot = null;
+    _albumDirs.clear();
   }
 
   /// Parses `XDG_MUSIC_DIR` out of `~/.config/user-dirs.dirs`.
