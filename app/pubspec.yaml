@@ -53,6 +53,17 @@ dependencies:
   url_launcher: ^6.3.2
   archive: ^4.2.0
 
+# `packages/audio_service` is a vendored copy of audio_service 0.18.19 (the
+# latest release) with one Android-only patch: it always calls
+# `MediaStyle.setShowActionsInCompactView(...)`. Upstream skips that call on
+# API 33+, which leaves Android 13/14/15 media cards without any play/pause or
+# skip buttons whenever SystemUI renders them from the notification actions
+# instead of the PlaybackState "semantic actions". See the comment in
+# packages/audio_service/android/.../AudioService.java and ARCHITECTURE.md.
+dependency_overrides:
+  audio_service:
+    path: ../packages/audio_service
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
