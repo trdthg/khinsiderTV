@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -56,7 +57,7 @@ class UpdateController extends Notifier<UpdateState> {
     );
     try {
       final saveDir = await updatesDirectory();
-      await service.downloadAsset(
+      final file = await service.downloadAsset(
         asset,
         saveDir: saveDir,
         onProgress: (p) {
@@ -66,6 +67,14 @@ class UpdateController extends Notifier<UpdateState> {
         },
       );
       if (!ref.mounted) return;
+      if (Platform.isAndroid) {
+        state = state.copyWith(
+          downloadPhase: UpdateDownloadPhase.downloaded,
+          downloadedFile: file.path,
+        );
+        await service.installApk(file.path);
+        return;
+      }
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -112,7 +121,12 @@ class UpdateController extends Notifier<UpdateState> {
   Future<void> revealDownload() async {
     final path = state.downloadedFile;
     if (path == null) return;
-    await ref.read(updateServiceProvider).revealInFileManager(path);
+    final service = ref.read(updateServiceProvider);
+    if (Platform.isAndroid) {
+      await service.installApk(path);
+      return;
+    }
+    await service.revealInFileManager(path);
   }
 
   /// Windows: restarts via a detached batch script (wait -> swap -> relaunch).

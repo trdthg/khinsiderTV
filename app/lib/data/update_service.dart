@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// GitHub release update check.
@@ -81,6 +82,14 @@ class UpdateService {
         if (a.name.endsWith('.flatpak')) return a;
       }
     }
+    if (Platform.isAndroid) {
+      for (final a in assets) {
+        if (a.name.endsWith('-universal.apk')) return a;
+      }
+      for (final a in assets) {
+        if (a.name.endsWith('.apk')) return a;
+      }
+    }
     return null;
   }
 
@@ -99,6 +108,16 @@ class UpdateService {
       },
     );
     return file;
+  }
+
+  static const MethodChannel _updateChannel = MethodChannel(
+    'dev.khinsider/update',
+  );
+
+  /// Ask the Android host to open the system package installer for [path].
+  Future<void> installApk(String path) async {
+    if (!Platform.isAndroid) return;
+    await _updateChannel.invokeMethod<void>('installApk', {'path': path});
   }
 
   /// Reveals [path] in the platform file manager (Finder / Explorer / xdg).
