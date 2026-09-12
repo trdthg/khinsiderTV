@@ -1,6 +1,7 @@
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' show parse;
 
+import 'image_urls.dart';
 import 'models.dart';
 
 /// Pure-DOM parsers for KHInsider pages.
@@ -73,12 +74,17 @@ abstract final class KhinsiderParsers {
 
     final title = doc.querySelector('h2')?.text.trim() ?? summary?.title ?? '';
 
-    // Large cover: first img under /thumbs/ (not thumbs_small).
+    // Cover art: the first image living in a `thumbs*` folder (the top
+    // screenshot block; `thumbs_small` is only used on search pages).
+    //
+    // The site embeds the 117×117 `/thumbs/` file there, which is soft once
+    // the app draws it at 250–320 px — ask for the 200×200 `thumbs_large`
+    // variant of the same path instead (see [KhinsiderImage]).
     String? coverUrl;
     for (final img in doc.querySelectorAll('img[src]')) {
       final src = img.attributes['src'] ?? '';
-      if (src.contains('/thumbs/')) {
-        coverUrl = src;
+      if (src.contains('/thumbs')) {
+        coverUrl = KhinsiderImage.large(src);
         break;
       }
     }

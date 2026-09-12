@@ -20,6 +20,14 @@ void main() {
       expect(first.platforms, contains('Switch'));
       expect(first.year, '2019');
       expect(first.thumbUrl, isNotNull);
+      // The search page only carries a 60×60 file; what the UI draws is the
+      // 200×200 variant of the very same path.
+      expect(first.thumbUrl, contains('/thumbs_small/'));
+      expect(first.imageUrl, contains('/thumbs_large/'));
+      expect(
+        first.imageUrl,
+        first.thumbUrl!.replaceFirst('/thumbs_small/', '/thumbs_large/'),
+      );
       expect(
         first.pageUrl,
         'https://downloads.khinsider.com/game-soundtracks/album/new-super-luigi-u-2019',
@@ -44,7 +52,14 @@ void main() {
       final album = KhinsiderParsers.parseAlbumPage(fixture('album4.html'));
 
       expect(album.summary.title, 'Mario & Luigi RPG Sound Selection');
-      expect(album.coverUrl, contains('/thumbs/'));
+      // The page embeds `/thumbs/` (117×117); the model carries the 200×200
+      // variant the UI renders.
+      expect(
+        album.coverUrl,
+        'https://nu.vgmtreasurechest.com/soundtracks/'
+        'mario-luigi-rpg-sound-selection/thumbs_large/00%20Cover.jpg',
+      );
+      expect(album.imageUrl, album.coverUrl);
 
       expect(album.tracks, isNotEmpty);
       expect(album.trackCount, greaterThan(5));

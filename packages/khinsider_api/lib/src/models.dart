@@ -4,6 +4,8 @@
 /// consumed by any frontend (Flutter app, CLI, embedded device, ...).
 library;
 
+import 'image_urls.dart';
+
 /// A lightweight album descriptor returned by search / listing pages.
 ///
 /// This is the "phase 1" object: it does NOT contain the track list.
@@ -27,8 +29,17 @@ class AlbumSummary {
   /// Site-relative path, e.g. `/game-soundtracks/album/<id>`.
   final String urlPath;
 
-  /// Small thumbnail (search list size).
+  /// Small (60×60) thumbnail exactly as the search page hands it out.
+  ///
+  /// Kept as-is because it is what gets persisted for favorites / recents.
+  /// Render [imageUrl] instead.
   final String? thumbUrl;
+
+  /// The cover to actually draw: the 200×200 `thumbs_large` variant.
+  ///
+  /// Derived on the fly (see [KhinsiderImage]), so summaries loaded from
+  /// persisted JSON get the better size without any migration.
+  String? get imageUrl => KhinsiderImage.large(thumbUrl);
 
   /// Platform names, e.g. `['DS', 'GBA']`.
   final List<String> platforms;
@@ -145,8 +156,12 @@ class Album {
 
   final AlbumSummary summary;
 
-  /// Large album cover.
+  /// Cover art URL as found on the album page (the 200×200 `thumbs_large`
+  /// variant — see [KhinsiderImage]). Render [imageUrl].
   final String? coverUrl;
+
+  /// The cover to actually draw: the 200×200 `thumbs_large` variant.
+  String? get imageUrl => KhinsiderImage.large(coverUrl);
 
   final List<AlbumTrack> tracks;
 

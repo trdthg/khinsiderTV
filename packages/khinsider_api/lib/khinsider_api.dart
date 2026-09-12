@@ -5,6 +5,7 @@
 library;
 
 export 'src/http_cache.dart';
+export 'src/image_urls.dart';
 export 'src/khinsider_client.dart';
 export 'src/models.dart';
 export 'src/parsers.dart';
