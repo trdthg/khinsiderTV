@@ -10,3 +10,9 @@
 .DS_Store
 *.iml
 .idea/
+
+# Signing material — never commit
+keystore.b64
+*.jks
+*.keystore
+android/app/upload-keystore.*
