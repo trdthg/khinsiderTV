@@ -714,4 +714,33 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
   });
+
+  testWidgets('mobile layout keeps a plain list and never enters zen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = await pumpAlbum(
+      tester,
+      cacheManager: testCache,
+      onTopOfHome: false,
+    );
+
+    expect(find.text('Track 1'), findsOneWidget);
+    expect(find.byType(NowPlayingArt), findsNothing);
+    expect(find.text('People who viewed this also viewed'), findsNothing);
+
+    await tester.tap(find.text('Track 1'));
+    await tester.pump();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    expect(find.byType(NowPlayingArt), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    container.dispose();
+  });
 }

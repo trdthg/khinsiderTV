@@ -139,6 +139,10 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
           .read(playerControllerProvider.notifier)
           .playAlbum(album, startIndex: index),
     );
+    if (MediaQuery.sizeOf(context).width <= 700) {
+      return;
+    }
+
     setState(() {
       _zen = true;
     });
@@ -294,10 +298,61 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
     }
   }
 
+  Widget _buildMobile(BuildContext context, Album album) {
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          _leave();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: SafeArea(
+        child: Column(
+          children: [
+            SizedBox(
+              height: 56,
+              child: Row(
+                children: [
+                  BackButton(onPressed: _leave),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      album.summary.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+            Expanded(
+              child: AlbumTrackList(
+                album: album,
+                focusNodes: widget.rowFocusNodes,
+                onTrackActivated: widget.onTrackActivated,
+                showRelated: false,
+                isZen: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final album = widget.album;
     final zenT = widget.zenT;
+
+    if (MediaQuery.sizeOf(context).width <= 700) {
+      return _buildMobile(context, album);
+    }
 
     // This Focus is an ancestor of everything in _AlbumPage (including the
     // OSD menu), so Esc bubbled up from a focused row reaches it.

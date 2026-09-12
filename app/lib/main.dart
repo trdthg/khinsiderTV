@@ -39,8 +39,11 @@ Future<void> main() async {
     } catch (_) {}
   }
 
-  // Windows/Linux playback backend for just_audio (no-op on macOS/Android).
-  JustAudioMediaKit.ensureInitialized();
+  // Windows/Linux playback backend for just_audio (never initialise it on
+  // Android/iOS/macOS where the native just_audio backend is used).
+  if (dart_io.Platform.isWindows || dart_io.Platform.isLinux) {
+    JustAudioMediaKit.ensureInitialized();
+  }
   // Gamepad support: register common game controllers as raw key sources so
   // D-Pad / A / B map to arrows / select / back on TV boxes.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
