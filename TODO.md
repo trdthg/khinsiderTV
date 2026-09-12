@@ -241,15 +241,17 @@
 ## G. 系统集成（用户反馈第五轮：通知栏 / macOS / 缓存目录）
 
 - [x] **G1 安卓通知栏只剩封面+标题+进度条，一个按钮都没有**
-      **真正的根因：通知 action 的图标被资源优化删掉了。**
-      `MediaControl.androidIcon` 是**运行时按名字**解析的
-      （`AudioService.getResourceId` → `Resources.getIdentifier`），静态分析看不到这次引用，
-      于是 release 构建里 audio_service 自带的 `audio_service_*` drawable 被当成无用资源删掉。
+      **真正的根因：release 构建的资源压缩把通知 action 的图标删掉了。**
+      Flutter 的 Gradle 插件对 release 默认开 `isMinifyEnabled = true` +
+      `isShrinkResources = true`（`FlutterPlugin.kt:217`），R8 的资源压缩会删掉
+      **只按名字引用**的资源，而 `MediaControl.androidIcon` 正是运行时按名字解析的
+      （`AudioService.getResourceId` → `Resources.getIdentifier`），静态分析看不到这次引用
+      —— 于是 audio_service 自带的 `audio_service_*` drawable 全被删掉。
       实测（解析 APK 里 `resources.arsc` 的字符串池）：v0.1.21 的 APK 里有 app 自己的资源名
       （`launch_background`、`network_security_config`…）也有 androidx 的
       （`accessibility_custom_action_*`、`notification_background`…），
-      但 **`audio_service_pause` / `play_arrow` / `skip_previous` / `skip_next` / `stop` 一个都没有**；
-      v0.1.20（pub 上的插件、尚未 vendored）完全一样 —— 所以这是从第一轮反馈
+      但 **`audio_service_pause` / `play_arrow` / `skip_previous` / `skip_next` / `stop` 一个都没有**，
+      `res/` 只剩 8 个文件；v0.1.20（pub 上的插件、尚未 vendored）完全一样 —— 所以这是从第一轮反馈
       「安卓没法从系统的弹窗上面控制播放的暂停下一首」起就一直存在的 bug。
       图标找不到 → `getResourceId` 返回 0 → action 的 icon 为 null → SystemUI 直接把 action 丢掉
       （AOSP `MediaDataManager.createActionsFromNotification`:
@@ -261,10 +263,12 @@
       1. 5 个 action 图标作为**矢量图放进 app 模块**
          `app/android/app/src/main/res/drawable/khinsider_{play,pause,skip_previous,skip_next,stop}.xml`，
          `KhinsiderAudioHandler` 用自定义 `MediaControl(androidIcon: 'drawable/khinsider_*')`
-         （app 自己的资源一定进包，已实测确认）；
+         （app 自己的资源一定进包）；
       2. `res/values/media_action_icons.xml` 里一个 array 引用这 5 个 drawable，
-         并在 `MainActivity` 里读 `R.array.media_action_icons` —— 让优化器认为它们被使用；
-      3. `res/raw/keep.xml` 的 `tools:keep` 兜底 + release 显式 `isShrinkResources = false`。
+         并在 `MainActivity` 里读 `R.array.media_action_icons` —— 让压缩器认为它们被使用；
+      3. `res/raw/keep.xml` 的 `tools:keep` 兜底 + release 显式 `isShrinkResources = false`
+         （实测：重新构建出的 APK 里 `khinsider_*` 五个图标内容都在，`res/` 从 8 个文件回到 104 个，
+         arm64 APK 只大 0.15 MB / 19.03 → 19.18 MB）。
       回归测试：`media_session_test.dart`「every control icon exists in the app module」
       逐条断言 `controls` 里每个 `androidIcon` 都①在 app 模块有同名文件、
       ②出现在 keep 列表里、③不是 `audio_service_*`。
