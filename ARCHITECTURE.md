@@ -80,6 +80,8 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | `PlaybackState` 带 `queueIndex` / `androidCompactActionIndices` / `MediaItem.duration` | 通知栏紧凑视图顺序稳定；有 duration 才有进度条（锁屏进度也依赖它） |
 | 位置更新按 1s 节流后再 publish | 系统用 `updatePosition + updateTime` 自行推算进度，逐 tick 上报只会刷爆 method channel |
 | 封面统一用 `thumbs_large`（200×200） | 页面只会给最小的那档：搜索结果 `thumbs_small` 60×60、专辑页 `/thumbs/` 117×117，画到 140–200px 卡片和 252px 封面上明显发虚。站点把同一张图预渲染了多档，**只有目录段不同**，改一下路径就能取 200×200（~15–80KB），不用额外请求；原图则可能到 10MB（3000×3000 PNG），绝不能进列表。见 `KhinsiderImage`，模型上统一暴露 `imageUrl` |
+| 触摸/鼠标/键盘的反馈按 `FocusManager.highlightMode` 分流 | 手指不会 hover，而点击后留在方块上的焦点环会被当成「选中」，还清不掉。`touch` 模式（手机/平板，或桌面没接鼠标）不画焦点环与悬停底色，改用水波纹；`traditional`（键盘/遥控/鼠标）行为完全不变。跟 Flutter 自己的 Material 组件同一条规则 |
+| 水波纹手绘在内容**之上**的透明 `Material` 里 | Material 的 ink 画在它包裹的 child **下面**（`_RenderInkFeatures.paint`），直接套 `InkWell` 会被不透明的卡片/封面盖住。所以墨层是 `Stack` 的最后一个孩子并套 `IgnorePointer`（不能抢走方块内部控件的手势），ink feature 由 `_handleTapDown/Up/Cancel` 手动驱动；离开屏幕时在 `deactivate` 里 dispose（`dispose` 时机太晚，Material 已经先被卸载 → ticker 泄漏） |
 
 ## 焦点与快捷键
 
@@ -89,6 +91,7 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 任意页面 | Esc（页面没处理时） | 返回上一层（`GlobalMediaKeys` 兜底） |
 | 进入专辑页 | — | 默认焦点落在第一首，**不会自动播放** |
 | 专辑页曲目行 | 鼠标 hover | 高亮 + 把键盘焦点移到该行 |
+| 专辑页曲目行 | 手指点击 | 水波纹反馈 + 播放；**不画焦点环**（焦点仍然跟随，之后接上键盘就从这一行继续） |
 | 专辑页曲目行 | ↑↓ 移动焦点 / Enter·Space 激活 | 播放该曲目并进入全屏 |
 | 全屏播放 | OK(Enter/点击封面) | 开关 OSD 菜单（焦点困在菜单内） |
 | 全屏播放 | Esc / 手柄 B | 菜单开→关菜单；菜单关→退回专辑页 |

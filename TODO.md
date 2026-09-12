@@ -170,3 +170,29 @@
       解析器顺手把专辑页封面从 117×117 升到 200×200。
       回归测试：`image_urls_test.dart`（api，6 条）、
       `app/test/image_loading_test.dart`（6 条，逐个调用点都用变异测试验证过确实会红）。
+
+---
+
+## E. 触摸/鼠标交互分流（用户反馈第三轮）
+
+- [x] **E1 安卓触摸屏：去掉 hover/选中高亮，改成点击水波纹**
+      鼠标/键盘需要「我现在在哪」的提示，手指不需要：手指不会 hover，而点击后留在方块上的
+      焦点环会被当成「选中」，而且点下一个才换、清不掉。所以在 `touch` 模式下不画焦点环与
+      悬停底色，改用水波纹；`traditional`（键盘/遥控/鼠标）行为一点没变。跟 Flutter 自己的
+      Material 组件同一条规则：`FocusManager.highlightMode`（最后用的是手指还是按键/鼠标），
+      并用 `addHighlightModeListener` 跟模式变化一起重绘，所以接上键盘后焦点环会自己回来。
+      实现要点（`core/widgets/dpad_tile.dart`）：
+      * 水波纹不能直接套 `InkWell`：Material 的 ink 画在它包裹的 child **下面**
+        （`_RenderInkFeatures.paint`：先画 ink，再 `super.paint` 画 child），
+        卡片/封面是不透明的，套在外面根本看不见。所以墨层是 `Stack` 的最后一个孩子
+        （内容之上）的透明 `Material`，ink feature 由 `onTapDown/Up/Cancel` 手动驱动
+        （`splashFactory.create` + `confirm/cancel`，和 `InkResponse` 一样）。
+      * 墨层套 `IgnorePointer`：它只是画，不能把方块内部控件的手势/Tooltip 挡掉
+        （曲目行的缓存徽标 tooltip、主题色块的 tooltip 都在 tile 内部）。
+      * 波纹在 `deactivate()` 里 dispose，不是 `dispose()`：tile 是墨层的**祖先**，
+        卸载时后代先走完，等到 `dispose()` 时 `Material` 已经没了（ticker 泄漏断言）。
+      * 点击仍然 `requestFocus()`（只是不画环）：之后接上键盘/手柄就从最后点的那一行继续。
+      回归测试：`test/touch_feedback_test.dart`（6 条，四条变异——去掉模式判断、把 ink 建到
+      外层 Material、墨层抢手势、只在 dispose 里清理——都能让对应的用例变红）。
+      注意：widget 测试里 `InkSparkle` 的 fragment shader 不会编译（真机上首帧也可能还没好），
+      所以水波纹那条用例把 `splashFactory` 固定成 `InkRipple` 再比像素。
