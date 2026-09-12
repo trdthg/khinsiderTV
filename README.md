@@ -73,6 +73,7 @@ from GitHub repository secrets.
 Add these secrets in **GitHub repo Settings > Secrets and variables > Actions**:
 
 - `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_TYPE` (`JKS` or `PKCS12`)
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
@@ -92,9 +93,21 @@ base64 -i upload-keystore.jks
 ```
 
 Paste the base64 output into `ANDROID_KEYSTORE_BASE64`. The workflow decodes it
-into `app/android/app/upload-keystore.jks` and writes
+into `app/android/app/upload-keystore.<type>` and writes
 `app/android/key.properties` before building. If the secrets are absent, the
 build falls back to the debug key (local development only).
+
+If your JDK `keytool` crashes with a `CodeHeap::allocate` SIGBUS (some macOS
+JDK builds), generate a PKCS12 keystore with OpenSSL instead:
+
+```bash
+openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 10000 \
+  -out cert.pem -subj "/CN=KHInsider/OU=Mobile/O=trdthg/C=CN"
+openssl pkcs12 -export -out upload-keystore.p12 \
+  -inkey key.pem -in cert.pem -name upload -passout pass:YOUR_PASSWORD
+base64 -i upload-keystore.p12 | tr -d '\n' > keystore.b64
+```
+Then set `ANDROID_KEYSTORE_TYPE=PKCS12`.
 
 ## CI / Build matrix
 

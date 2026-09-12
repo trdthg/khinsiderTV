@@ -76,14 +76,18 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            KEYSTORE_EXT="${ANDROID_KEYSTORE_TYPE:-JKS}"
+            KEYSTORE_EXT="${KEYSTORE_EXT,,}"
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "android/app/upload-keystore.$KEYSTORE_EXT"
             {
               echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
               echo "keyPassword=$ANDROID_KEY_PASSWORD"
               echo "keyAlias=$ANDROID_KEY_ALIAS"
-              echo "storeFile=upload-keystore.jks"
+              echo "storeFile=upload-keystore.$KEYSTORE_EXT"
+              echo "storeType=${ANDROID_KEYSTORE_TYPE:-JKS}"
             } > android/key.properties
           else
             echo "Android signing secrets are not configured; using the debug signing fallback."
