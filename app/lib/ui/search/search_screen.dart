@@ -34,13 +34,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      final moved = FocusScope.of(
-        context,
-      ).focusInDirection(TraversalDirection.down);
+      // On the narrow layout the field sits BELOW the results, so "into the
+      // results" is the upward direction there.
+      final moved = FocusScope.of(context).focusInDirection(
+        _narrow ? TraversalDirection.up : TraversalDirection.down,
+      );
       if (moved) return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
+
+  /// Phones (and other narrow windows) get the search field at the bottom,
+  /// right above the on-screen keyboard, with the results stacked upwards.
+  bool get _narrow => MediaQuery.sizeOf(context).width <= 700;
 
   void _submit([String? preset]) {
     if (preset != null) _controller.text = preset;
@@ -51,46 +57,54 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(searchControllerProvider);
+    final narrow = _narrow;
+
+    final searchBar = Padding(
+      padding: EdgeInsets.fromLTRB(16, narrow ? 4 : 16, 16, narrow ? 10 : 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              autofocus: true,
+              focusNode: _searchFocus,
+              controller: _controller,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _submit(),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search game soundtracks…',
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          DpadIconButton(
+            tooltip: 'Search',
+            filled: true,
+            icon: Icons.arrow_forward,
+            onPressed: _submit,
+          ),
+        ],
+      ),
+    );
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      autofocus: true,
-                      focusNode: _searchFocus,
-                      controller: _controller,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Search game soundtracks…',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  DpadIconButton(
-                    tooltip: 'Search',
-                    filled: true,
-                    icon: Icons.arrow_forward,
-                    onPressed: _submit,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(child: _buildBody(context, state)),
+            if (!narrow) searchBar,
+            Expanded(child: _buildBody(context, state, reverse: narrow)),
+            if (narrow) searchBar,
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, SearchState state) {
+  Widget _buildBody(
+    BuildContext context,
+    SearchState state, {
+    bool reverse = false,
+  }) {
     if (state.loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -103,7 +117,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (state.results.isEmpty) {
       return const _Message(icon: Icons.search_off, text: 'No albums found.');
     }
-    return _AlbumGrid(albums: state.results);
+    return _AlbumGrid(albums: state.results, reverse: reverse);
   }
 }
 
@@ -232,9 +246,11 @@ class _AlbumRow extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        child: albums[i].thumbUrl != null
+                        child: albums[i].imageUrl != null
                             ? CachedNetworkImage(
-                                imageUrl: albums[i].thumbUrl!,
+                                // `imageUrl`, not `thumbUrl`: the search page
+                                // only hands out a 60×60 file.
+                                imageUrl: albums[i].imageUrl!,
                                 fit: BoxFit.cover,
                               )
                             : const Icon(Icons.album, size: 48),
@@ -262,9 +278,13 @@ class _AlbumRow extends ConsumerWidget {
 }
 
 class _AlbumGrid extends StatelessWidget {
-  const _AlbumGrid({required this.albums});
+  const _AlbumGrid({required this.albums, this.reverse = false});
 
   final List<AlbumSummary> albums;
+
+  /// Narrow layouts stack the grid from the bottom up, so the first hit sits
+  /// directly above the (bottom-anchored) search field.
+  final bool reverse;
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +297,7 @@ class _AlbumGrid extends StatelessWidget {
 
         return GridView.builder(
           key: const ValueKey('album-grid'),
+          reverse: reverse,
           padding: const EdgeInsets.all(16),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
@@ -318,9 +339,9 @@ class _AlbumCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: album.thumbUrl != null
+              child: album.imageUrl != null
                   ? CachedNetworkImage(
-                      imageUrl: album.thumbUrl!,
+                      imageUrl: album.imageUrl!,
                       fit: BoxFit.cover,
                     )
                   : const Icon(Icons.album, size: 56),

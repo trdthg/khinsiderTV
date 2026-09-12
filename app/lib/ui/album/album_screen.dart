@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -337,6 +338,10 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                 onTrackActivated: widget.onTrackActivated,
                 showRelated: false,
                 isZen: true,
+                // The album info lives ABOVE the track list, inside the same
+                // scrollable — the phone layout must not lose the cover /
+                // favorite button the way the bare title bar used to.
+                header: _MobileAlbumHeader(album: album),
               ),
             ),
           ],
@@ -485,7 +490,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                             }
                           },
                           child: NowPlayingArt(
-                            coverUrl: album.coverUrl,
+                            coverUrl: album.imageUrl,
                             size: coverRect.width,
                             vinylOpacity: t,
                           ),
@@ -557,12 +562,6 @@ class _InfoPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isFav =
-        ref
-            .watch(favoritesProvider)
-            .value
-            ?.any((a) => a.id == album.summary.id) ??
-        false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -577,20 +576,7 @@ class _InfoPanel extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
-        DpadTile(
-          borderRadius: 20,
-          onSelect: () =>
-              ref.read(favoritesProvider.notifier).toggle(album.summary),
-          child: ExcludeFocus(
-            child: IgnorePointer(
-              child: FilledButton.tonalIcon(
-                onPressed: () {},
-                icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
-                label: Text(isFav ? 'In favorites' : 'Favorite'),
-              ),
-            ),
-          ),
-        ),
+        _FavoriteButton(album: album.summary),
         if (album.metadata != null) ...[
           const SizedBox(height: 16),
           Text('Details', style: Theme.of(context).textTheme.titleSmall),
@@ -600,6 +586,165 @@ class _InfoPanel extends ConsumerWidget {
         const SizedBox(height: 16),
         _CacheFolderHint(albumId: album.summary.id),
       ],
+    );
+  }
+}
+
+/// The album header used by the narrow (phone) layout: cover, title, track
+/// count, favorite button and a collapsible details block, all rendered
+/// ABOVE the track list.
+///
+/// It is a plain [Column] — the album screen drops it into
+/// [AlbumTrackList.header], i.e. into the track list's own scroll view, so
+/// the whole page scrolls as ONE list (no nested scrollables, and the info
+/// scrolls away once the user starts reading the tracks).
+class _MobileAlbumHeader extends ConsumerWidget {
+  const _MobileAlbumHeader({required this.album});
+
+  final Album album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final metadata = album.metadata;
+    // One dim summary line, so the album is identifiable before the user
+    // opens the details block.
+    final summary = [
+      if (album.summary.platforms.isNotEmpty)
+        album.summary.platforms.join(', '),
+      if (album.summary.year != null) album.summary.year!,
+      if (metadata?.developedBy != null) metadata!.developedBy!,
+    ].join(' · ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 104,
+                  height: 104,
+                  child: album.imageUrl == null
+                      ? const _CoverPlaceholder()
+                      : CachedNetworkImage(
+                          imageUrl: album.imageUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) => const _CoverPlaceholder(),
+                          errorWidget: (_, _, _) => const _CoverPlaceholder(),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      album.summary.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${album.trackCount} tracks',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if (summary.isNotEmpty)
+                      Text(
+                        summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    // Align to the left so the button keeps its natural width
+                    // instead of stretching across the column.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _FavoriteButton(album: album.summary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (metadata != null) ...[
+            const SizedBox(height: 6),
+            Theme(
+              // No dividers: the details block is part of the header, not a
+              // separate card.
+              data: theme.copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 6),
+                visualDensity: VisualDensity.compact,
+                title: Text('Album details', style: theme.textTheme.titleSmall),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AlbumMetadataPanel(metadata: metadata),
+                  ),
+                  const SizedBox(height: 8),
+                  // The cache-folder hint lives in here (collapsed by
+                  // default) so the phone header stays short; the desktop
+                  // side panel shows it inline as before.
+                  _CacheFolderHint(albumId: album.summary.id),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Placeholder shown while the cover loads / when the album has none.
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+      child: const Center(child: Icon(Icons.music_note, size: 40)),
+    );
+  }
+}
+
+/// Favorite toggle that works for BOTH touch and D-Pad: the [DpadTile] owns
+/// the gesture, the button underneath is inert (`IgnorePointer`) so a tap
+/// cannot toggle twice.
+class _FavoriteButton extends ConsumerWidget {
+  const _FavoriteButton({required this.album});
+
+  final AlbumSummary album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFav =
+        ref.watch(favoritesProvider).value?.any((a) => a.id == album.id) ??
+        false;
+    return DpadTile(
+      borderRadius: 20,
+      onSelect: () => ref.read(favoritesProvider.notifier).toggle(album),
+      child: ExcludeFocus(
+        child: IgnorePointer(
+          child: FilledButton.tonalIcon(
+            onPressed: () {},
+            icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
+            label: Text(isFav ? 'In favorites' : 'Favorite'),
+          ),
+        ),
+      ),
     );
   }
 }

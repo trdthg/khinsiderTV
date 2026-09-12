@@ -24,6 +24,7 @@ class AlbumTrackList extends ConsumerWidget {
     this.onLeftArrow,
     this.zenT,
     this.isZen = false,
+    this.header,
   });
 
   final Album album;
@@ -43,6 +44,11 @@ class AlbumTrackList extends ConsumerWidget {
 
   /// Whether the morph is currently in its zen/playback layout.
   final bool isZen;
+
+  /// Optional content rendered as the FIRST child of the same scrollable —
+  /// used by the narrow (phone) album layout to keep the album info above the
+  /// tracks without nesting a second scroll view inside this one.
+  final Widget? header;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,8 +86,15 @@ class AlbumTrackList extends ConsumerWidget {
         child: ListView.builder(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-          itemCount: album.tracks.length + (showRelatedRow ? 1 : 0),
+          itemCount:
+              (header == null ? 0 : 1) +
+              album.tracks.length +
+              (showRelatedRow ? 1 : 0),
           itemBuilder: (context, i) {
+            if (header != null) {
+              if (i == 0) return header!;
+              i -= 1;
+            }
             if (showRelatedRow && i == album.tracks.length) {
               return RelatedAlbumsRow(
                 albums: album.relatedAlbums,

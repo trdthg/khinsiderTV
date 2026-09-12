@@ -99,10 +99,10 @@ class RelatedAlbumsRow extends ConsumerWidget {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      child: album.thumbUrl == null
+                                      child: album.imageUrl == null
                                           ? const Icon(Icons.album, size: 40)
                                           : CachedNetworkImage(
-                                              imageUrl: album.thumbUrl ?? '',
+                                              imageUrl: album.imageUrl ?? '',
                                               fit: BoxFit.cover,
                                             ),
                                     ),
