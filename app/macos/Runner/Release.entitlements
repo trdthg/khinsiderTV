@@ -9,5 +9,16 @@
 	<!-- KHInsider API + CDN streaming -->
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- just_audio serves EVERY track through a local HTTP proxy
+	     (`StreamAudioSource._onLoad` -> `_ProxyHttpServer.ensureRunning`), and
+	     `LockCachingAudioSource` (what this app always plays) is a
+	     StreamAudioSource. A sandboxed app may not listen on a socket without
+	     this entitlement, so without it a release build never receives a single
+	     byte: the UI spins on "loading" forever and nothing is ever heard,
+	     cached or not. DebugProfile.entitlements has it - that is Flutter's
+	     template default - which is why `flutter run` works and the .dmg does
+	     not. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
 </dict>
 </plist>
