@@ -141,6 +141,7 @@
       `_prefetchNextImpl` 缓存分支补 `finally`（append 抛错曾让 `_prefetchInFlight`
       永久为 true，之后再也不会预取）。
       回归测试：`test/media_session_test.dart`（7 条）。
+      注：这里的接线方式（把会话当成播放器用）本身是错的，第四轮直接踩中，见 F1。
 - [x] **D2 安卓点不到「喜欢」；专辑信息要在列表上面**
       窄屏专辑页原本只有一条标题栏，没有封面/信息/收藏按钮。现在
       `AlbumTrackList.header` 接受一个「表头」，手机布局把
@@ -196,3 +197,30 @@
       外层 Material、墨层抢手势、只在 dispose 里清理——都能让对应的用例变红）。
       注意：widget 测试里 `InkSparkle` 的 fragment shader 不会编译（真机上首帧也可能还没好），
       所以水波纹那条用例把 `splashFactory` 固定成 `InkRipple` 再比像素。
+
+---
+
+## F. 播放控制全挂（用户反馈第四轮）
+
+- [x] **F1 播了一首歌之后：点别的歌没反应、暂停点不动、通知栏按钮全部失灵（偶发卡死）**
+      根因是 D1 的接线：`main.dart` 把 `audioPlayerProvider` 覆盖成了
+      `KhinsiderAudioHandler`（媒体会话），而它的 `play/pause/stop` 正是**系统**入口，
+      内部会转交回 `PlayerController` —— 于是
+      `controller.pause()` → `handler.pause()` → `controller.pause()` → … 无限同步递归，
+      把 isolate 挂死。通知栏进度条还在走是**假象**：那是系统按
+      `updatePosition + updateTime + speed` 自己推算的，不代表应用还活着。
+      三条症状因此完全一致：第一首能播（`loadQueue` 不走这条路），之后所有经过
+      `play/pause/stop` 的操作全死 —— 点队列里已有的歌（`skipToIndex + play()`）、
+      应用内暂停、通知栏暂停/停止；深递归/栈溢出还会让进程偶发卡死。
+      修法：把「会话」与「播放器」拆成两个对象，**类型上**就不可能再互相调用：
+      * 新增 `MediaSession` 接口（`setSystemCommandHandler` + `endSession()`）；
+        `KhinsiderAudioHandler` 只实现它，不再是 `BaseAudioPlayer`（删掉全部转发方法，
+        `MediaItem` 改为读 `BaseAudioPlayer.items` 这个单一事实来源）。
+      * `PlayerController` 只用 `audioPlayerProvider`（impl）播放；系统命令通过
+        `mediaSessionProvider` 装到会话上；`stop()` 额外 `endSession()`，
+        应用内停止也会收掉通知栏（老 Android 上通知划不掉，只能靠它）。
+      * `main.dart`：先建 `transport = JustAudioPlayerImpl()`，同一个实例既给
+        `audioPlayerProvider`，也给 `KhinsiderAudioHandler(player: transport)` 去镜像。
+      回归测试：`media_session_test.dart` 新增 `production wiring (main.dart)` 一组
+      （每条命令只到 impl 一次、系统路径 session → controller → impl、
+      应用内 `stop()` 会清掉 `mediaItem`），并给 `BaseAudioPlayer` 加 `items`。

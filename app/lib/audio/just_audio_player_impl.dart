@@ -30,14 +30,13 @@ class JustAudioPlayerImpl implements BaseAudioPlayer {
   final AudioPlayer _player = AudioPlayer();
   final AudioCacheManager _cache;
 
-  /// No media session here (the audio_service handler owns it on Android /
-  /// iOS / macOS), so system commands never arrive at this implementation.
-  @override
-  void setSystemCommandHandler(SystemMediaCommandHandler? handler) {}
-
   /// Metadata of the items currently loaded in the queue, index-aligned with
-  /// the player sequence. Used by [swapCurrentSource].
+  /// the player sequence. Used by [swapCurrentSource] and mirrored by the
+  /// media session ([KhinsiderAudioHandler]).
   final List<PlayableItem> _items = [];
+
+  @override
+  List<PlayableItem> get items => List<PlayableItem>.unmodifiable(_items);
 
   /// Serialises queue mutations so a loadQueue/append/stop burst cannot
   /// interleave and leave [_items] out of step with the player's sequence.

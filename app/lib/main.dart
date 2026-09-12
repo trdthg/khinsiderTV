@@ -48,18 +48,27 @@ Future<void> main() async {
   // D-Pad / A / B map to arrows / select / back on TV boxes.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+  // The transport every play/pause/queue command goes to. It is created first
+  // because the media session (below) mirrors it.
+  final BaseAudioPlayer transport = JustAudioPlayerImpl();
+
   // Media session (macOS Now-Playing / media keys, Android notification &
   // lock-screen controls). audio_service only ships platform channels for
   // android/ios/macos/web — on Windows/Linux `AudioService.init` NEVER
-  // completes (no window would ever appear!), so those platforms run with
-  // the default audioPlayerProvider (JustAudioPlayerImpl) instead.
-  final BaseAudioPlayer player;
+  // completes (no window would ever appear!), so those platforms run without
+  // a session (no system media integration).
+  //
+  // The session is deliberately NOT what the state layer plays through: its
+  // play/pause/stop are the system's entry points and forward back into
+  // PlayerController, so handing it to audioPlayerProvider would make every
+  // transport command recurse into itself until the app hung. It only gets the
+  // transport to read state from and to seek.
+  MediaSession? session;
   if (dart_io.Platform.isAndroid ||
       dart_io.Platform.isIOS ||
       dart_io.Platform.isMacOS) {
-    // Media session: Now-Playing / media keys / notification controls.
-    final handler = await AudioService.init<KhinsiderAudioHandler>(
-      builder: KhinsiderAudioHandler.new,
+    session = await AudioService.init<KhinsiderAudioHandler>(
+      builder: () => KhinsiderAudioHandler(player: transport),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'dev.khinsider.app.playback',
         androidNotificationChannelName: 'KHInsider playback',
@@ -87,16 +96,14 @@ Future<void> main() async {
     AudioService.asyncError.listen((Object e) {
       debugPrint('audio_service async error: $e');
     });
-    player = handler;
-  } else {
-    // Windows/Linux: audio_service has no platform channels here — run the
-    // plain player (playback still works, just no system media integration).
-    player = JustAudioPlayerImpl();
   }
 
   runApp(
     ProviderScope(
-      overrides: [audioPlayerProvider.overrideWithValue(player)],
+      overrides: [
+        audioPlayerProvider.overrideWithValue(transport),
+        mediaSessionProvider.overrideWithValue(session),
+      ],
       child: const KhinsiderApp(),
     ),
   );

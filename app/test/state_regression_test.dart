@@ -30,6 +30,8 @@ class FakeAudioPlayer implements BaseAudioPlayer {
   @override
   int get queueLength => 0;
   @override
+  List<PlayableItem> get items => const [];
+  @override
   Future<void> loadQueue(List<PlayableItem> items, {int startIndex = 0}) async {
     _snaps.add(AudioPlayerSnapshot(playing: true, currentIndex: 0));
   }
@@ -55,8 +57,6 @@ class FakeAudioPlayer implements BaseAudioPlayer {
   Future<void> next() async {}
   @override
   Future<void> previous() async {}
-  @override
-  void setSystemCommandHandler(SystemMediaCommandHandler? handler) {}
   @override
   Future<void> dispose() async {}
 }

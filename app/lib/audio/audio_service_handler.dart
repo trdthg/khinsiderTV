@@ -2,27 +2,28 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 
 import 'base_audio_player.dart';
-import 'just_audio_player_impl.dart';
 
-/// [BaseAudioHandler] (audio_service) that owns a [BaseAudioPlayer] (by
-/// default a [JustAudioPlayerImpl]).
+/// The app's [MediaSession] (audio_service): publishes what the player is doing
+/// to the system (macOS Now Playing & media keys, the Android notification and
+/// lock-screen controls) and forwards system transport commands back into the
+/// app.
 ///
-/// * Implements the app's [BaseAudioPlayer] interface by delegation.
-/// * Publishes MediaItem / PlaybackState so macOS Now-Playing (media keys,
-///   control center), Android notification & lock-screen controls work.
-///
-/// System-originated commands (`play` / `pause` / `skipToNext` /
-/// `skipToPrevious`) are forwarded to the app-level
-/// [SystemMediaCommandHandler] installed by the state layer, so pressing
+/// **This is a bridge, not a player.** It reads the streams of the
+/// [BaseAudioPlayer] it was built with and drives nothing itself: system
+/// commands (`play` / `pause` / `skipToNext` / `skipToPrevious` / `stop`) go to
+/// the [SystemMediaCommandHandler] installed by the state layer, so pressing
 /// "next" on the lock screen behaves exactly like pressing it in the app —
-/// including resolving the successor track when it is not queued yet.
-class KhinsiderAudioHandler extends BaseAudioHandler
-    implements BaseAudioPlayer {
-  KhinsiderAudioHandler({BaseAudioPlayer? inner})
-    : _inner = inner ?? JustAudioPlayerImpl() {
+/// including resolving the successor when it is not queued yet.
+///
+/// Keeping the two roles apart matters: if the state layer drove playback
+/// through this object instead of through the player, `pause()` would land
+/// here, forward to the controller, and the controller would call `pause()`
+/// again — forever.
+class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
+  KhinsiderAudioHandler({required this.player}) {
     _subs
       ..add(
-        _inner.snapshotStream.listen((snap) {
+        player.snapshotStream.listen((snap) {
           _latestSnapshot = snap;
           _onSnapshot(snap);
         }),
@@ -30,20 +31,22 @@ class KhinsiderAudioHandler extends BaseAudioHandler
       ..add(
         // The media-session seek bar only appears once the current item
         // carries a duration, and the duration arrives after the item itself.
-        _inner.durationStream.listen((d) {
+        player.durationStream.listen((d) {
           _lastDuration = d;
           _onSnapshot(_latestSnapshot);
         }),
       )
       ..add(
-        _inner.positionStream.listen((p) {
+        player.positionStream.listen((p) {
           _lastPosition = p;
           _publishPlayback();
         }),
       );
   }
 
-  final BaseAudioPlayer _inner;
+  /// The player this session mirrors and seeks. Owned by the app (the very
+  /// same instance is what `audioPlayerProvider` serves) — never disposed here.
+  final BaseAudioPlayer player;
 
   SystemMediaCommandHandler? _commands;
 
@@ -64,61 +67,21 @@ class KhinsiderAudioHandler extends BaseAudioHandler
     _commands = handler;
   }
 
-  // -- BaseAudioPlayer -------------------------------------------------------
+  /// The handler system transport commands are currently routed to — the app's
+  /// [PlayerController] — or null when none is installed.
+  SystemMediaCommandHandler? get systemCommandHandler => _commands;
 
+  /// Ends the session: no media item, no foreground service, no notification.
   @override
-  Stream<AudioPlayerSnapshot> get snapshotStream => _inner.snapshotStream;
-
-  @override
-  Stream<Duration> get positionStream => _inner.positionStream;
-
-  @override
-  Stream<Duration?> get durationStream => _inner.durationStream;
-
-  @override
-  int get queueLength => _inner.queueLength;
-
-  @override
-  Future<void> loadQueue(List<PlayableItem> items, {int startIndex = 0}) async {
-    // Publish the mirror only after the inner call succeeded, otherwise the
-    // system media session could advertise a queue that is not playing.
-    await _inner.loadQueue(items, startIndex: startIndex);
-    _queueItems
-      ..clear()
-      ..addAll(items);
+  Future<void> endSession() async {
+    _lastDuration = null;
+    mediaItem.add(null); // nothing is playing any more
+    await super.stop();
   }
 
-  @override
-  Future<void> append(List<PlayableItem> items) async {
-    await _inner.append(items);
-    _queueItems.addAll(items);
-  }
-
-  @override
-  Future<void> swapCurrentSource(String url) => _inner.swapCurrentSource(url);
-
-  /// Caching: every source is a [LockCachingAudioSource], i.e. the currently
-  /// playing track streams **while** its bytes are written to the local cache
-  /// (Application Support/audio_cache, one stable file per URL). Queued /
-  /// prefetched tracks only mount their cache source — nothing is downloaded
-  /// until they are actually played (IMPORTANT: never call request() manually
-  /// here — concurrent request()+load() on the same source can deadlock the
-  /// UI). Replaying a cached track is instant and works offline; partial
-  /// downloads resume across restarts.
-
-  @override
-  Future<void> seek(Duration position) => _inner.seek(position);
-
-  @override
-  Future<void> next() => _inner.next();
-
-  @override
-  Future<void> previous() => _inner.previous();
-
-  @override
-  Future<void> skipToIndex(int index) => _inner.skipToIndex(index);
-
-  @override
+  /// Releases this bridge's subscriptions. The player it mirrors belongs to the
+  /// app (the same instance is handed to `audioPlayerProvider`), so it is *not*
+  /// disposed here.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
@@ -126,49 +89,47 @@ class KhinsiderAudioHandler extends BaseAudioHandler
       await sub.cancel();
     }
     _subs.clear();
-    await _inner.dispose();
   }
 
-  // -- audio_service interface (system media controls) -----------------------
+  // -- audio_service interface: the *system's* entry points ------------------
 
   @override
-  Future<void> play() => _commands?.play() ?? _inner.play();
+  Future<void> play() => _commands?.play() ?? player.play();
 
   @override
-  Future<void> pause() => _commands?.pause() ?? _inner.pause();
+  Future<void> pause() => _commands?.pause() ?? player.pause();
 
   @override
-  Future<void> skipToNext() => _commands?.next() ?? _inner.next();
+  Future<void> skipToNext() => _commands?.next() ?? player.next();
 
   @override
-  Future<void> skipToPrevious() => _commands?.previous() ?? _inner.previous();
+  Future<void> skipToPrevious() => _commands?.previous() ?? player.previous();
 
   @override
   Future<void> stop() async {
-    // Route through the controller when there is one so the app's own queue
-    // state is cleared as well (the notification has a dismiss/stop control
-    // — the affordance that `androidNotificationOngoing: true` used to add
-    // via its cancel button).
     final commands = _commands;
     if (commands != null) {
+      // Routed through the controller so the app's own queue state is cleared
+      // as well; that path ends the session itself (see [endSession]), which
+      // is the affordance for `androidNotificationOngoing: true`'s missing
+      // cancel button.
       await commands.stop();
-    } else {
-      await _inner.stop();
+      return;
     }
-    _queueItems.clear();
-    _lastDuration = null;
-    mediaItem.add(null); // nothing is playing any more
-    await super.stop(); // audio_service: end foreground/notification state
+    await player.stop();
+    await endSession();
   }
+
+  @override
+  Future<void> seek(Duration position) => player.seek(position);
 
   // -- state sync ------------------------------------------------------------
 
-  final List<PlayableItem> _queueItems = [];
-
   void _onSnapshot(AudioPlayerSnapshot? snap) {
     final i = snap?.currentIndex;
-    if (i != null && i >= 0 && i < _queueItems.length) {
-      final item = _queueItems[i];
+    final items = player.items;
+    if (i != null && i >= 0 && i < items.length) {
+      final item = items[i];
       final current = mediaItem.value;
       if (current == null ||
           current.id != item.id ||

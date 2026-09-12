@@ -114,6 +114,16 @@ class PlayerController extends Notifier<PlayerState>
     implements SystemMediaCommandHandler {
   BaseAudioPlayer get _player => ref.read(audioPlayerProvider);
 
+  /// The system media session, when the platform has one (Android / iOS /
+  /// macOS); null on desktop.
+  ///
+  /// Playback is never driven through it: the session's own `play` / `pause` /
+  /// `stop` are the *system's* entry points and forward straight back into this
+  /// controller (see [MediaSession]), so using it as the player would recurse
+  /// until the app hung. It is only here to receive system commands and to end
+  /// the session.
+  MediaSession? get _session => ref.read(mediaSessionProvider);
+
   /// Cancellation for the in-flight phase-2 resolution of the current
   /// playAlbum call (the track-list spinner cancel button).
   CancelToken? _loadCancelToken;
@@ -154,7 +164,10 @@ class PlayerController extends Notifier<PlayerState>
     // System media controls (notification / lock screen / media keys) must
     // run through this controller, not straight into the player: only the
     // controller knows the album queue and can resolve a missing successor.
-    p.setSystemCommandHandler(this);
+    // Registered on the *session* — never on the player, which is what this
+    // controller drives.
+    final session = _session;
+    session?.setSystemCommandHandler(this);
     _subs
       ..add(
         p.snapshotStream.listen((snap) {
@@ -200,7 +213,7 @@ class PlayerController extends Notifier<PlayerState>
       }
       _prefetchToken?.cancel();
       _subs.clear();
-      p.setSystemCommandHandler(null);
+      session?.setSystemCommandHandler(null);
     });
     return const PlayerState();
   }
@@ -545,6 +558,7 @@ class PlayerController extends Notifier<PlayerState>
   /// Halt playback and drop the queue (media Stop key).
   @override
   Future<void> stop() async {
+    final session = _session;
     _loadCancelToken?.cancel();
     _prefetchToken?.cancel();
     _prefetchToken = null;
@@ -553,6 +567,10 @@ class PlayerController extends Notifier<PlayerState>
     _loadCancelToken = null;
     _albumIndexOfQueue.clear();
     await _player.stop();
+    // The system controls belong to the playback that was just dropped: end
+    // the session as well, otherwise the notification would linger on a
+    // stopped player.
+    await session?.endSession();
     if (!ref.mounted) return;
     state = PlayerState(preferredFormat: state.preferredFormat);
   }
@@ -591,8 +609,18 @@ class PlayerController extends Notifier<PlayerState>
 final playerControllerProvider =
     NotifierProvider<PlayerController, PlayerState>(PlayerController.new);
 
-/// The single [BaseAudioPlayer] instance for the whole app.
+/// The single [BaseAudioPlayer] instance for the whole app, i.e. the object
+/// every `play` / `pause` / queue mutation goes to.
 /// (Switch port: replace this provider's implementation only.)
 final audioPlayerProvider = Provider<BaseAudioPlayer>((ref) {
   return JustAudioPlayerImpl();
 });
+
+/// The system media session of the current platform, or null when there is
+/// none (Windows/Linux, where audio_service has no platform channels, and
+/// tests).
+///
+/// Overridden in `main.dart` with the `audio_service` bridge, which publishes
+/// the media item / playback state and receives the notification, lock-screen
+/// and headset commands.
+final mediaSessionProvider = Provider<MediaSession?>((ref) => null);

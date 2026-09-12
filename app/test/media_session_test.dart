@@ -18,7 +18,10 @@ class RecordingPlayer implements BaseAudioPlayer {
   final positions = StreamController<Duration>.broadcast();
 
   final List<String> calls = [];
-  SystemMediaCommandHandler? systemHandler;
+
+  /// Items currently loaded; [KhinsiderAudioHandler] mirrors these as its
+  /// MediaItem (it reads them from the player, it does not own them).
+  final List<PlayableItem> queue = [];
   int _queueLength = 0;
 
   @override
@@ -29,10 +32,15 @@ class RecordingPlayer implements BaseAudioPlayer {
   Stream<Duration?> get durationStream => durations.stream;
   @override
   int get queueLength => _queueLength;
+  @override
+  List<PlayableItem> get items => List<PlayableItem>.unmodifiable(queue);
 
   @override
   Future<void> loadQueue(List<PlayableItem> items, {int startIndex = 0}) async {
     calls.add('loadQueue');
+    queue
+      ..clear()
+      ..addAll(items);
     _queueLength = items.length;
     // The real player reports the index as soon as the queue is loaded; the
     // controller maps its state from exactly this snapshot.
@@ -42,6 +50,7 @@ class RecordingPlayer implements BaseAudioPlayer {
   @override
   Future<void> append(List<PlayableItem> items) async {
     calls.add('append');
+    queue.addAll(items);
     _queueLength += items.length;
   }
 
@@ -54,7 +63,12 @@ class RecordingPlayer implements BaseAudioPlayer {
   @override
   Future<void> pause() async => calls.add('pause');
   @override
-  Future<void> stop() async => calls.add('stop');
+  Future<void> stop() async {
+    calls.add('stop');
+    queue.clear();
+    _queueLength = 0;
+  }
+
   @override
   Future<void> seek(Duration position) async => calls.add('seek');
   @override
@@ -63,11 +77,6 @@ class RecordingPlayer implements BaseAudioPlayer {
   Future<void> next() async => calls.add('next');
   @override
   Future<void> previous() async => calls.add('previous');
-
-  @override
-  void setSystemCommandHandler(SystemMediaCommandHandler? handler) {
-    systemHandler = handler;
-  }
 
   @override
   Future<void> dispose() async {
@@ -162,7 +171,7 @@ void main() {
   group('KhinsiderAudioHandler (system media controls)', () {
     test('play/pause/next/previous go through the app-level handler', () async {
       final inner = RecordingPlayer();
-      final handler = KhinsiderAudioHandler(inner: inner);
+      final handler = KhinsiderAudioHandler(player: inner);
       final commands = RecordingCommands();
       handler.setSystemCommandHandler(commands);
       addTearDown(handler.dispose);
@@ -185,7 +194,7 @@ void main() {
 
     test('falls back to the inner player when nothing is installed', () async {
       final inner = RecordingPlayer();
-      final handler = KhinsiderAudioHandler(inner: inner);
+      final handler = KhinsiderAudioHandler(player: inner);
       addTearDown(handler.dispose);
 
       await handler.play();
@@ -199,10 +208,10 @@ void main() {
       'publishes transport controls, compact order and queue index',
       () async {
         final inner = RecordingPlayer();
-        final handler = KhinsiderAudioHandler(inner: inner);
+        final handler = KhinsiderAudioHandler(player: inner);
         addTearDown(handler.dispose);
 
-        await handler.loadQueue(const [_item], startIndex: 0);
+        inner.queue.add(_item);
         inner.snapshots.add(
           const AudioPlayerSnapshot(playing: true, currentIndex: 0),
         );
@@ -232,10 +241,10 @@ void main() {
 
     test('the pause control replaces play once playback pauses', () async {
       final inner = RecordingPlayer();
-      final handler = KhinsiderAudioHandler(inner: inner);
+      final handler = KhinsiderAudioHandler(player: inner);
       addTearDown(handler.dispose);
 
-      await handler.loadQueue(const [_item], startIndex: 0);
+      inner.queue.add(_item);
       inner.snapshots.add(
         const AudioPlayerSnapshot(playing: false, currentIndex: 0),
       );
@@ -252,19 +261,83 @@ void main() {
     });
   });
 
+  group('production wiring (main.dart)', () {
+    // main.dart injects *two* objects: the transport
+    // (`audioPlayerProvider`) and the media session (`mediaSessionProvider`).
+    // They must stay two objects. The session's own play/pause/stop are the
+    // *system's* entry points and forward into the controller, so if the
+    // controller played through the session instead of through the transport,
+    // every command would call itself back — pause() -> session.pause() ->
+    // controller.pause() -> … until the app hung. Keeping the session out of
+    // the BaseAudioPlayer type is what makes that impossible; this test pins
+    // the observable half of it (exactly one call per command).
+    test(
+      'transport reaches the player exactly once, system path included',
+      () async {
+        final player = RecordingPlayer();
+        final session = KhinsiderAudioHandler(player: player);
+        addTearDown(session.dispose);
+        final container = ProviderContainer(
+          overrides: [
+            audioPlayerProvider.overrideWithValue(player),
+            mediaSessionProvider.overrideWithValue(session),
+          ],
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(playerControllerProvider.notifier);
+
+        await controller.play();
+        await controller.pause();
+        expect(player.calls, ['play', 'pause']);
+
+        // The system path: session -> controller -> transport, still once.
+        await session.pause();
+        await session.skipToNext();
+        expect(player.calls, ['play', 'pause', 'pause', 'next']);
+
+        // Seed a live session item so "stop ends the session" is observable.
+        player.queue.add(_item);
+        player.snapshots.add(
+          const AudioPlayerSnapshot(playing: true, currentIndex: 0),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(session.mediaItem.value?.id, _item.id);
+
+        await controller.stop();
+        expect(player.calls.last, 'stop');
+        expect(
+          session.mediaItem.value,
+          isNull,
+          reason:
+              'stopping in-app must end the system session (media item + '
+              'foreground service), not just silence the player',
+        );
+      },
+    );
+  });
+
   group('PlayerController as SystemMediaCommandHandler', () {
-    test('installs itself on the player and uninstalls on dispose', () {
+    test('installs itself on the media session and uninstalls on dispose', () {
       final player = RecordingPlayer();
+      final session = KhinsiderAudioHandler(player: player);
+      addTearDown(session.dispose);
       final container = ProviderContainer(
-        overrides: [audioPlayerProvider.overrideWithValue(player)],
+        overrides: [
+          audioPlayerProvider.overrideWithValue(player),
+          mediaSessionProvider.overrideWithValue(session),
+        ],
       );
 
       final notifier = container.read(playerControllerProvider.notifier);
-      expect(player.systemHandler, same(notifier));
+      expect(
+        session.systemCommandHandler,
+        same(notifier),
+        reason: 'system commands must run through the controller',
+      );
 
       container.dispose();
       expect(
-        player.systemHandler,
+        session.systemCommandHandler,
         isNull,
         reason: 'a disposed controller must not keep receiving commands',
       );

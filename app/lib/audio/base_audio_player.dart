@@ -40,13 +40,13 @@ class PlayableItem {
 /// (Android notification / lock screen, macOS Now Playing, headset buttons)
 /// at the app level.
 ///
-/// The state layer installs one via
-/// [BaseAudioPlayer.setSystemCommandHandler]. Without it, system "next" can
-/// only advance within the already-loaded queue — and this app deliberately
-/// queues just the current track plus one prefetched successor, so a system
-/// "next" that arrives before the prefetch finished used to be a silent
-/// no-op. Routing the command through the controller runs exactly the same
-/// logic as an in-app press, including resolving the successor on demand.
+/// The state layer installs one via [MediaSession.setSystemCommandHandler].
+/// Without it, system "next" can only advance within the already-loaded queue
+/// — and this app deliberately queues just the current track plus one
+/// prefetched successor, so a system "next" that arrives before the prefetch
+/// finished used to be a silent no-op. Routing the command through the
+/// controller runs exactly the same logic as an in-app press, including
+/// resolving the successor on demand.
 abstract class SystemMediaCommandHandler {
   Future<void> play();
   Future<void> pause();
@@ -58,6 +58,28 @@ abstract class SystemMediaCommandHandler {
   Future<void> stop();
 }
 
+/// The system media session: the Android notification / lock screen, macOS Now
+/// Playing, headset and media keys.
+///
+/// Deliberately **not** a [BaseAudioPlayer]. Its `play`/`pause`/`stop` are the
+/// *system's* entry points and forward into the installed
+/// [SystemMediaCommandHandler], which is the app's own [PlayerController]. If
+/// the controller drove playback through this same object, then
+/// `controller.pause()` → `session.pause()` → `controller.pause()` → … would
+/// recurse until the app hung — which is exactly what the production wiring
+/// used to do. Playback is therefore driven through [BaseAudioPlayer]; the
+/// session is only there to publish state and to receive system commands.
+abstract class MediaSession {
+  /// Installs the app-level handler for system transport commands.
+  ///
+  /// Call with `null` on teardown.
+  void setSystemCommandHandler(SystemMediaCommandHandler? handler);
+
+  /// Drops the media item and ends the foreground service, so the notification
+  /// / lock-screen controls disappear with the playback they belong to.
+  Future<void> endSession();
+}
+
 /// Abstract audio playback interface.
 ///
 /// **Switch-port reserved channel**: the Flutter app only ever talks to this
@@ -66,12 +88,6 @@ abstract class SystemMediaCommandHandler {
 /// this implementation needs to be swapped — UI, state and data layers stay
 /// untouched.
 abstract class BaseAudioPlayer {
-  /// Installs the app-level handler used for system media-control commands.
-  ///
-  /// Call with `null` on teardown. Implementations that own no media session
-  /// (desktop fallbacks) may ignore this.
-  void setSystemCommandHandler(SystemMediaCommandHandler? handler);
-
   /// Full player state (processing/ready, playing flag, current index).
   Stream<AudioPlayerSnapshot> get snapshotStream;
 
@@ -80,6 +96,10 @@ abstract class BaseAudioPlayer {
 
   /// Duration of the currently loaded item (null while unknown/buffering).
   Stream<Duration?> get durationStream;
+
+  /// Items currently loaded in the queue, index-aligned with the player's own
+  /// sequence. The media session mirrors these as its `MediaItem`s.
+  List<PlayableItem> get items;
 
   /// Replace the whole queue and start playing at [startIndex].
   Future<void> loadQueue(List<PlayableItem> items, {int startIndex});

@@ -27,9 +27,9 @@ lib/
 │     页面只给 60×60/117×117，`KhinsiderImage.large` 取 200×200）
 │
 ├── audio/                     # 播放抽象与实现
-│   ├── base_audio_player.dart #   播放器接口（Switch 移植预留通道）+ 系统媒体命令回调
+│   ├── base_audio_player.dart #   播放器接口（Switch 移植预留通道）+ 系统命令回调 / 媒体会话接口
 │   ├── just_audio_player_impl.dart  # just_audio 实现（LockCaching 边播边缓存）
-│   ├── audio_service_handler.dart   # audio_service 媒体会话桥接
+│   ├── audio_service_handler.dart   # audio_service 媒体会话桥接（只发布+收命令，不播放）
 │   └── audio_cache_manager.dart     # 音频文件缓存管理
 │
 ├── state/                     # Riverpod 控制器（唯一的 UI ↔ 数据桥梁）
@@ -76,6 +76,7 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 缓存状态同步扫描（stat） | 每行 1–2 次 stat，不等 event loop，UI 不会卡；下载期间才用 1.2s 定时器轮询 |
 | 媒体键挂在 root 最低优先级 | 任意页面全局生效，且不与深层快捷键冲突 |
 | 系统媒体命令（通知栏/锁屏/耳机键）经 `SystemMediaCommandHandler` 回到 `PlayerController` | 队列只有「当前 + 预取的下一首」，系统按下一首时若预取还没完成，直接透传给 impl 就是静默 no-op；走 controller 才能按需解析下一首 |
+| 媒体会话（`KhinsiderAudioHandler`）**不是** `BaseAudioPlayer`，播放一律走 `audioPlayerProvider` | 会话的 `play/pause/stop` 是**系统**入口，内部会转交回 `PlayerController`；若 controller 又拿同一个对象播放，`pause()` → `handler.pause()` → `controller.pause()` 会无限同步递归（实测把 isolate 卡死，而通知栏进度条因为系统自行推算仍在走，看起来「还在播」）。所以两件事拆成两个真实对象：`BaseAudioPlayer`（播放，`audioPlayerProvider`）与 `MediaSession`（接收系统命令 + `endSession()`，`mediaSessionProvider`） |
 | Android `androidStopForegroundOnPause: false` | 设为 `true` 时暂停会退出前台服务，之后在后台按通知栏的播放/暂停/下一首需要重新 `startForegroundService`，Android 12+ 会抛 `ForegroundServiceStartNotAllowedException` → 系统控件看起来「点不动」。保持前台可完全绕开（`androidNotificationOngoing` 因此必须为 `false`，两者互斥）；代价是老版本 Android 上通知不可划掉，所以 controls 里补了一个 `MediaControl.stop`（只在展开视图显示）作为结束会话的出口 |
 | `PlaybackState` 带 `queueIndex` / `androidCompactActionIndices` / `MediaItem.duration` | 通知栏紧凑视图顺序稳定；有 duration 才有进度条（锁屏进度也依赖它） |
 | 位置更新按 1s 节流后再 publish | 系统用 `updatePosition + updateTime` 自行推算进度，逐 tick 上报只会刷爆 method channel |
