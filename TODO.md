@@ -116,3 +116,57 @@
       | `test/audio_cache_manager_test.dart` | Music 目录布局、文件名净化、同名专辑不互踩、absent→downloading→cached、album.json、封面进 image/、总量/删除/清空 |
       | `test/album_ux_regression_test.dart` | 默认焦点在第一首且不自动播放、无焦点时 Esc 可退出、入口路由下返回键/Esc 可用、hover 聚焦、缓存徽标三种状态 + FLAC 标记、related albums 飞离动画（中途淡出/位移，结束后消失，Esc 返回恢复）、RelatedAlbumsRow 散开方向 |
 - [x] C3 `ARCHITECTURE.md` 已更新（缓存层级、Music 目录结构、焦点与快捷键）。
+
+---
+
+## D. Android 体验修复（用户反馈第二轮）
+
+- [x] **D1 安卓通知栏/锁屏的播放·暂停·下一首点不动**
+      两个原因，都修了：
+      1) `AudioServiceConfig` 里 `androidStopForegroundOnPause: true`：暂停后服务退出前台，
+         之后在后台按通知栏按钮要重新 `startForegroundService`，Android 12+ 抛
+         `ForegroundServiceStartNotAllowedException`（按钮停在播放图标、下一首无反应）。
+         改为 `false`（服务暂停时保持前台；`androidNotificationOngoing` 与它互斥，一并
+         改为 `false`），并订阅 `AudioService.asyncError` 打日志。
+      2) 队列只有「当前 + 预取的下一首」。预取还没完成时按下一首，透传给 impl 是
+         静默 no-op。新增 `BaseAudioPlayer.setSystemCommandHandler` /
+         `SystemMediaCommandHandler`，`KhinsiderAudioHandler` 的 `play/pause/
+         skipToNext/skipToPrevious` 改为转发给 `PlayerController`；`next()` 会
+         **按需解析**缺失的下一首（并 `await` 正在进行的预取）再切歌。
+      顺带：`PlaybackState` 补 `queueIndex` / `androidCompactActionIndices`，
+      `MediaItem` 补 `duration`（通知栏进度条/锁屏进度需要），位置上报按 1s 节流；
+      因为服务暂停时不再退出前台、老版本 Android 上通知不可划掉，补一个
+      `MediaControl.stop`（展开视图才显示，紧凑视图仍是 上一首/播放暂停/下一首），
+      `stop()` 同样经 `SystemMediaCommandHandler` 回到 controller，顺带清空应用内队列状态；
+      `_prefetchNextImpl` 缓存分支补 `finally`（append 抛错曾让 `_prefetchInFlight`
+      永久为 true，之后再也不会预取）。
+      回归测试：`test/media_session_test.dart`（7 条）。
+- [x] **D2 安卓点不到「喜欢」；专辑信息要在列表上面**
+      窄屏专辑页原本只有一条标题栏，没有封面/信息/收藏按钮。现在
+      `AlbumTrackList.header` 接受一个「表头」，手机布局把
+      封面 + 标题 + 曲目数 + 平台/年份/开发商 + 收藏按钮 + 折叠的
+      「Album details」（内含缓存目录提示）放在**曲目列表上方**，与曲目共用同一个
+      `ListView`（不嵌套滚动）。收藏按钮抽成 `_FavoriteButton`：`DpadTile` 包裹
+      `IgnorePointer` 的 `FilledButton`，触摸与遥控器 OK 走同一条路径、不会触发两次。
+      400×900 / 360×640 / 320×568 三种尺寸都无溢出（拉通铺开 details 也一样）。
+      回归测试：`test/mobile_ux_test.dart`。
+- [x] **D3 安卓搜索栏移到下面、结果从下往上排**
+      窄屏（≤700）时搜索栏放到 `Column` 的**底部**（键盘弹起跟随上移），
+      结果网格 `reverse: true`：第一条紧贴搜索框、往上排；搜索框的「↓ 进结果」
+      在窄屏改成向上找焦点。宽屏（TV/桌面）布局完全不变。
+      回归测试：`test/mobile_ux_test.dart`。
+- [x] **D4 封面别再用缩略图**
+      站点把每张封面预渲染成多档，**只有目录段不同**：
+      `<file>` 原图（最大见过 10.8MB / 3000×3000）、`thumbs_large/` 200×200、
+      `thumbs/` 117×117、`thumbs_small/` 60×60。页面只给最小的两档
+      （搜索结果 60×60、专辑页 117×117），画到 140–200px 卡片和 252px 封面上发虚。
+      新增 `KhinsiderImage.large()`（khinsider_api）：改写目录段取 200×200，
+      幂等、保留 host/专辑目录/百分号编码，非专辑图片原样返回；
+      模型加 `AlbumSummary.imageUrl` / `Album.imageUrl`（由 `thumbUrl`/`coverUrl`
+      现算，收藏/最近浏览里持久化的老数据不用迁移）。
+      全app 改用 `imageUrl`：搜索网格、收藏/最近浏览行、相关专辑、
+      专辑页封面、正在播放、通知栏/锁屏封面（`artUri`）、
+      以及写到 `Music/KHInsider/<专辑>/image/cover.jpg` 的那张。
+      解析器顺手把专辑页封面从 117×117 升到 200×200。
+      回归测试：`image_urls_test.dart`（api，6 条）、
+      `app/test/image_loading_test.dart`（6 条，逐个调用点都用变异测试验证过确实会红）。

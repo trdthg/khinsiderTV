@@ -21,17 +21,28 @@ khinsider/
 
 **UI layer** — Flutter. Responsive grid/list layouts; D-Pad & gamepad focus
 system (`DpadTile`, `FocusTraversalGroup`); app-wide media-key shortcuts
-(`MediaPlayPause`, `MediaTrackNext`, …) via `CallbackShortcuts`.
+(`MediaPlayPause`, `MediaTrackNext`, …) via `CallbackShortcuts`. Narrow
+(phone) layouts put the search bar at the **bottom** with the results stacked
+bottom-up, and show the album header (cover · title · favorite · details)
+above the track list.
 
 **State layer** — `flutter_riverpod`. `PlayerController` bridges the UI to the
 abstract `BaseAudioPlayer` and implements **two-phase lazy loading**:
 only the clicked track is resolved immediately (1 request), remaining tracks
-are resolved sequentially in the background and appended to the queue.
+are resolved sequentially in the background and appended to the queue. It also
+implements `SystemMediaCommandHandler`, so notification/lock-screen/headset
+commands run the same code path as in-app presses — including resolving the
+successor track when the notification's "next" arrives before the prefetch
+finished.
 
 **Playback backend** — `JustAudioPlayerImpl` wrapped by a `KhinsiderAudioHandler`
 (`audio_service`): macOS Now-Playing / media keys, Android notification &
 lock-screen controls. The app never depends on audio_service directly — only
-`main()` wires the handler in via a provider override.
+`main()` wires the handler in via a provider override. On Android the service
+deliberately stays in the foreground while paused
+(`androidStopForegroundOnPause: false`), because Android 12+ refuses to restart
+a foreground service from the background — which is what used to make the
+notification's play/pause/next buttons unresponsive.
 
 **Local storage** — `storage/json_kv_store.dart`, a dependency-free JSON-file
 KV store (Application Support dir, atomic writes, debounced flush). Powers:
@@ -44,6 +55,13 @@ Flutter/native dependencies:
 * Phase 1: search / album page — **one** HTML request, parsed into typed models.
 * Phase 2: track page — resolved only on demand, extracts the direct CDN URL
   from `<audio id="audio" src="…">` and FLAC `<a>` links.
+
+**Images** — covers come in pre-rendered sizes at the same path
+(`<file>` original / `thumbs_large/` 200×200 / `thumbs/` 117×117 /
+`thumbs_small/` 60×60). The pages only hand out the smallest two, so
+`KhinsiderImage.large` rewrites the folder segment and every cover the app
+draws is the 200×200 file (~15–80 KB) — see `AlbumSummary.imageUrl` /
+`Album.imageUrl`. Originals (up to ~10 MB) are deliberately never loaded.
 
 ## Site notes (reverse-engineered)
 

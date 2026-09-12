@@ -23,8 +23,11 @@ lib/
 │   │   └── json_kv_store.dart #   JSON 文件 KV 存储（原子写/防抖落盘）
 │   └── preferences_store.dart #   KV 存储 provider + 收藏/历史/最近浏览
 │
+│   （khinsider_api 包里另有 `image_urls.dart`：封面多档尺寸的 URL 改写，
+│     页面只给 60×60/117×117，`KhinsiderImage.large` 取 200×200）
+│
 ├── audio/                     # 播放抽象与实现
-│   ├── base_audio_player.dart #   播放器接口（Switch 移植预留通道）
+│   ├── base_audio_player.dart #   播放器接口（Switch 移植预留通道）+ 系统媒体命令回调
 │   ├── just_audio_player_impl.dart  # just_audio 实现（LockCaching 边播边缓存）
 │   ├── audio_service_handler.dart   # audio_service 媒体会话桥接
 │   └── audio_cache_manager.dart     # 音频文件缓存管理
@@ -72,6 +75,11 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 页面级 `Focus(autofocus: true)` 兜底 | 什么都不聚焦时按键从 route 的 focus scope 冒泡，页面内的 `onKeyEvent` 收不到；本节点持有焦点才能接住 Esc |
 | 缓存状态同步扫描（stat） | 每行 1–2 次 stat，不等 event loop，UI 不会卡；下载期间才用 1.2s 定时器轮询 |
 | 媒体键挂在 root 最低优先级 | 任意页面全局生效，且不与深层快捷键冲突 |
+| 系统媒体命令（通知栏/锁屏/耳机键）经 `SystemMediaCommandHandler` 回到 `PlayerController` | 队列只有「当前 + 预取的下一首」，系统按下一首时若预取还没完成，直接透传给 impl 就是静默 no-op；走 controller 才能按需解析下一首 |
+| Android `androidStopForegroundOnPause: false` | 设为 `true` 时暂停会退出前台服务，之后在后台按通知栏的播放/暂停/下一首需要重新 `startForegroundService`，Android 12+ 会抛 `ForegroundServiceStartNotAllowedException` → 系统控件看起来「点不动」。保持前台可完全绕开（`androidNotificationOngoing` 因此必须为 `false`，两者互斥）；代价是老版本 Android 上通知不可划掉，所以 controls 里补了一个 `MediaControl.stop`（只在展开视图显示）作为结束会话的出口 |
+| `PlaybackState` 带 `queueIndex` / `androidCompactActionIndices` / `MediaItem.duration` | 通知栏紧凑视图顺序稳定；有 duration 才有进度条（锁屏进度也依赖它） |
+| 位置更新按 1s 节流后再 publish | 系统用 `updatePosition + updateTime` 自行推算进度，逐 tick 上报只会刷爆 method channel |
+| 封面统一用 `thumbs_large`（200×200） | 页面只会给最小的那档：搜索结果 `thumbs_small` 60×60、专辑页 `/thumbs/` 117×117，画到 140–200px 卡片和 252px 封面上明显发虚。站点把同一张图预渲染了多档，**只有目录段不同**，改一下路径就能取 200×200（~15–80KB），不用额外请求；原图则可能到 10MB（3000×3000 PNG），绝不能进列表。见 `KhinsiderImage`，模型上统一暴露 `imageUrl` |
 
 ## 焦点与快捷键
 
@@ -87,6 +95,18 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | OSD 菜单 | ↑↓←→ 导航 / Enter 激活 | 进度、播放、音质 MP3/FLAC、主题 6 色 |
 | 进度条聚焦 | ←→ | ±10s 快进快退（不移动焦点） |
 | 未播放行 | 数字序号 → 点击 | 播放；转圈时点击 = 取消加载 |
+
+## 响应式布局（窄屏 = 手机 / 宽屏 = TV·桌面，断点 700）
+
+| 页面 | 窄屏（≤700） | 宽屏（>700） |
+|---|---|---|
+| 搜索 | 搜索栏固定在**底部**（键盘弹起时跟随上移），结果网格 `reverse: true` 从下往上排，第一条结果紧贴搜索框 | 搜索栏在顶部，结果从上往下 |
+| 专辑 | 封面 + 标题 + 曲目数 + 收藏按钮 + 「Album details」（折叠）作为**列表的表头**，与曲目在同一个 `ListView` 里滚动（不做嵌套滚动）；不进入 zen 全屏形态，点当前行=暂停/继续 | 左侧信息面板 + 封面，右侧曲目列表，可 morph 进 zen |
+
+* 收藏按钮 = `DpadTile` 包裹一个 `IgnorePointer` 的 `FilledButton`：触摸点按与遥控器 OK
+  走同一条路径（`DpadTile.onSelect`），按钮本身不吃事件，因此不会触发两次。
+* 专辑信息用 `AlbumTrackList.header` 塞进曲目列表，而不是外面再套一层滚动视图 ——
+  否则两个 `ListView` 会互相抢滚动，且 `shrinkWrap` 列表本来就会构建全部子项。
 
 ## 状态一览
 
@@ -109,7 +129,7 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 页面缓存 | 搜索/专辑页 HTML | 永久 + 显式刷新按钮绕过 | `api_cache/` |
 | 曲目页缓存 | 单曲页 HTML（直链解析） | TTL 30 分钟（CDN token 会轮换） | `api_cache/` |
 | 音频缓存 | 播放中的曲目 | LockCaching 边下边播，断点续传 | `Music/KHInsider/<专辑>/mp3\|flac` |
-| 封面/清单 | 封面图 + album.json | 开始播放时写入 | `Music/KHInsider/<专辑>/image\|other` |
+| 封面/清单 | 封面图（200×200 `thumbs_large`）+ album.json | 开始播放时写入 | `Music/KHInsider/<专辑>/image\|other` |
 | 预加载 | 下一首（仅一首） | 播放稳定后解析直链 + 后台下载 | 同音频缓存 |
 
 ### 音频缓存：直接落在系统 Music 文件夹，用户可以自己用
