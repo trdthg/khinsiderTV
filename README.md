@@ -64,6 +64,38 @@ Flutter/native dependencies:
 
 `repin` 会先删除该 tag 对应的 GitHub Release（旧产物一并清掉），CI 重跑后自动重建。
 
+### Android release signing
+
+Android refuses to update an installed app if the new APK is signed with a
+different key. The CI workflow therefore reads a **stable release keystore**
+from GitHub repository secrets.
+
+Add these secrets in **GitHub repo Settings > Secrets and variables > Actions**:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Generate the keystore once and keep it backed up:
+
+```bash
+keytool -genkeypair -v \
+  -keystore upload-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias upload
+
+# Linux:
+base64 -w0 upload-keystore.jks
+# macOS:
+base64 -i upload-keystore.jks
+```
+
+Paste the base64 output into `ANDROID_KEYSTORE_BASE64`. The workflow decodes it
+into `app/android/app/upload-keystore.jks` and writes
+`app/android/key.properties` before building. If the secrets are absent, the
+build falls back to the debug key (local development only).
+
 ## CI / Build matrix
 
 `.github/workflows/ci.yml` builds and releases on every `v*` tag
