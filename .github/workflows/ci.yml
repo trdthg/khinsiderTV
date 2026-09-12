@@ -90,6 +90,10 @@ jobs:
               echo "storeType=${ANDROID_KEYSTORE_TYPE:-JKS}"
             } > android/key.properties
           else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "ERROR: refusing to publish a release tag without Android signing secrets." >&2
+              exit 1
+            fi
             echo "Android signing secrets are not configured; using the debug signing fallback."
           fi
       - name: Build fat APK (armv7 + arm64)
