@@ -343,7 +343,7 @@ class AudioCacheManager {
         'id': album.summary.id,
         'title': album.summary.title,
         'source': album.summary.pageUrl,
-        'coverUrl': album.coverUrl,
+        'coverUrl': album.imageUrl,
         if (album.metadata?.year != null) 'year': album.metadata!.year,
         if (album.metadata?.platforms.isNotEmpty ?? false)
           'platforms': album.metadata!.platforms,

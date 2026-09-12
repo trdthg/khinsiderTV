@@ -36,6 +36,28 @@ class PlayableItem {
   final Uri? artUri;
 }
 
+/// Handles the commands that arrive from the *system* media controls
+/// (Android notification / lock screen, macOS Now Playing, headset buttons)
+/// at the app level.
+///
+/// The state layer installs one via
+/// [BaseAudioPlayer.setSystemCommandHandler]. Without it, system "next" can
+/// only advance within the already-loaded queue — and this app deliberately
+/// queues just the current track plus one prefetched successor, so a system
+/// "next" that arrives before the prefetch finished used to be a silent
+/// no-op. Routing the command through the controller runs exactly the same
+/// logic as an in-app press, including resolving the successor on demand.
+abstract class SystemMediaCommandHandler {
+  Future<void> play();
+  Future<void> pause();
+  Future<void> next();
+  Future<void> previous();
+
+  /// End the session (notification "stop"/dismiss). Must clear the app's own
+  /// queue state too, not just the player's.
+  Future<void> stop();
+}
+
 /// Abstract audio playback interface.
 ///
 /// **Switch-port reserved channel**: the Flutter app only ever talks to this
@@ -44,6 +66,12 @@ class PlayableItem {
 /// this implementation needs to be swapped — UI, state and data layers stay
 /// untouched.
 abstract class BaseAudioPlayer {
+  /// Installs the app-level handler used for system media-control commands.
+  ///
+  /// Call with `null` on teardown. Implementations that own no media session
+  /// (desktop fallbacks) may ignore this.
+  void setSystemCommandHandler(SystemMediaCommandHandler? handler);
+
   /// Full player state (processing/ready, playing flag, current index).
   Stream<AudioPlayerSnapshot> get snapshotStream;
 

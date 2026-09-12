@@ -63,10 +63,30 @@ Future<void> main() async {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'dev.khinsider.app.playback',
         androidNotificationChannelName: 'KHInsider playback',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
+        // Keep the foreground service alive while paused.
+        //
+        // With `androidStopForegroundOnPause: true` (what this used to be) the
+        // service leaves the foreground on pause. The next notification press
+        // (play / pause / next) then has to START the foreground service again
+        // from the background, and Android 12+ refuses that with
+        // `ForegroundServiceStartNotAllowedException`. The result is dead
+        // system controls: the button stays on "play" and "next" does nothing,
+        // even though the audio may keep playing. Staying in the foreground
+        // avoids the restart entirely — this is the workaround audio_service
+        // documents for Android 12+.
+        androidStopForegroundOnPause: false,
+        // `androidNotificationOngoing` is only honoured together with
+        // `androidStopForegroundOnPause: true` (see AudioServiceConfig's
+        // assert), so it must stay off here.
+        androidNotificationOngoing: false,
+        androidNotificationClickStartsActivity: true,
       ),
     );
+    // The failure mode above surfaces asynchronously; log it instead of
+    // letting it take the app down.
+    AudioService.asyncError.listen((Object e) {
+      debugPrint('audio_service async error: $e');
+    });
     player = handler;
   } else {
     // Windows/Linux: audio_service has no platform channels here — run the

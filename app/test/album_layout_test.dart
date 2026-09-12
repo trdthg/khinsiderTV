@@ -41,6 +41,8 @@ class FakeAudioPlayer implements BaseAudioPlayer {
   @override
   Future<void> previous() async {}
   @override
+  void setSystemCommandHandler(SystemMediaCommandHandler? handler) {}
+  @override
   Future<void> dispose() async {}
 }
 

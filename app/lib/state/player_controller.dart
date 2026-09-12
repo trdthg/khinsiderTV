@@ -106,7 +106,12 @@ class PlayerState {
 /// Bridges the UI to [BaseAudioPlayer] and performs lazy phase-2 URL
 /// resolution: the clicked track is resolved immediately, remaining tracks
 /// are resolved one-by-one in the background and appended to the queue.
-class PlayerController extends Notifier<PlayerState> {
+///
+/// It also acts as the app's [SystemMediaCommandHandler], so a play / pause /
+/// next press on the Android notification or the lock screen runs the exact
+/// same code path as a press inside the app.
+class PlayerController extends Notifier<PlayerState>
+    implements SystemMediaCommandHandler {
   BaseAudioPlayer get _player => ref.read(audioPlayerProvider);
 
   /// Cancellation for the in-flight phase-2 resolution of the current
@@ -117,6 +122,11 @@ class PlayerController extends Notifier<PlayerState> {
   /// resolve and append at most the next track, never the whole album.
   CancelToken? _prefetchToken;
   bool _prefetchInFlight = false;
+
+  /// The in-flight [_prefetchNext] run, so a system "next" that arrives while
+  /// the successor is still being resolved can wait for it instead of
+  /// silently doing nothing.
+  Future<void>? _prefetchFuture;
   Album? _playingAlbum;
 
   /// Maps impl-queue position -> album track index. The audio queue only
@@ -141,6 +151,10 @@ class PlayerController extends Notifier<PlayerState> {
   PlayerState build() {
     // Wire impl streams to UI state (kept for the lifetime of the app).
     final p = _player;
+    // System media controls (notification / lock screen / media keys) must
+    // run through this controller, not straight into the player: only the
+    // controller knows the album queue and can resolve a missing successor.
+    p.setSystemCommandHandler(this);
     _subs
       ..add(
         p.snapshotStream.listen((snap) {
@@ -186,6 +200,7 @@ class PlayerController extends Notifier<PlayerState> {
       }
       _prefetchToken?.cancel();
       _subs.clear();
+      p.setSystemCommandHandler(null);
     });
     return const PlayerState();
   }
@@ -230,9 +245,7 @@ class PlayerController extends Notifier<PlayerState> {
         preferredFormat: state.preferredFormat,
       );
       unawaited(_cacheAlbumSidecar(album));
-      await _player.loadQueue([
-        _playableFromUri(album, startIndex, cachedUri),
-      ]);
+      await _player.loadQueue([_playableFromUri(album, startIndex, cachedUri)]);
       if (!ref.mounted) return;
       unawaited(_prefetchNext(fromIndex: startIndex));
       return;
@@ -309,7 +322,9 @@ class PlayerController extends Notifier<PlayerState> {
       await cache.cacheAlbumCover(
         album.summary.id,
         album.summary.title,
-        album.coverUrl,
+        // `imageUrl` (200×200 `thumbs_large`), not the raw album-page URL:
+        // this is the same file the UI draws.
+        album.imageUrl,
       );
     } catch (_) {
       // Sidecar files are a nice-to-have; never break playback over them.
@@ -320,12 +335,35 @@ class PlayerController extends Notifier<PlayerState> {
   /// drop whatever was already queued, returning the row to its idle state.
   Future<void> cancelLoading() => stop();
 
+  /// Resolves and appends at most ONE following track (see
+  /// [_prefetchNextImpl]).
+  ///
+  /// Returns the run that is already in flight, so a caller that needs the
+  /// successor to be in the queue *now* (the system "next" button) can await
+  /// it instead of racing it.
+  ///
+  /// Resolution failures are swallowed here: prefetching is a background
+  /// optimisation and `next()` re-checks the queue instead of relying on an
+  /// exception. Without this, the `unawaited` call sites in [playAlbum] would
+  /// turn a flaky track page into an unhandled async error.
+  Future<void> _prefetchNext({int? fromIndex}) {
+    final pending = _prefetchFuture;
+    if (pending != null) return pending;
+    final run = _prefetchNextImpl(
+      fromIndex: fromIndex,
+    ).catchError((Object _) {});
+    _prefetchFuture = run;
+    return run.whenComplete(() {
+      if (identical(_prefetchFuture, run)) _prefetchFuture = null;
+    });
+  }
+
   /// Resolves and appends at most ONE following track.
   ///
   /// KHInsider is not a CDN we can hammer, so we deliberately never resolve
   /// or queue the rest of the album. Each new current track asks for its own
   /// single successor.
-  Future<void> _prefetchNext({int? fromIndex}) async {
+  Future<void> _prefetchNextImpl({int? fromIndex}) async {
     final album = _playingAlbum;
     if (album == null || _prefetchInFlight) return;
 
@@ -351,15 +389,20 @@ class PlayerController extends Notifier<PlayerState> {
 
     final cachedUri = _cachedUriFor(album, nextIndex);
     if (cachedUri != null) {
-      final item = _playableFromUri(album, nextIndex, cachedUri);
-      await _player.append([item]);
-      if (ref.mounted == false) return;
-      if (token.isCancelled) return;
-      _albumIndexOfQueue.add(nextIndex);
-      state = state.copyWith(resolvingAhead: false);
-      if (identical(_prefetchToken, token)) {
-        _prefetchToken = null;
-        _prefetchInFlight = false;
+      try {
+        final item = _playableFromUri(album, nextIndex, cachedUri);
+        await _player.append([item]);
+        if (ref.mounted == false) return;
+        if (token.isCancelled) return;
+        _albumIndexOfQueue.add(nextIndex);
+        state = state.copyWith(resolvingAhead: false);
+      } finally {
+        // Must run even if `append` throws, otherwise `_prefetchInFlight`
+        // stays true forever and no track is ever prefetched again.
+        if (identical(_prefetchToken, token)) {
+          _prefetchToken = null;
+          _prefetchInFlight = false;
+        }
       }
       return;
     }
@@ -431,7 +474,7 @@ class PlayerController extends Notifier<PlayerState> {
 
   PlayableItem _playableFromUri(Album album, int index, Uri uri) {
     final track = album.tracks[index];
-    final coverUrl = album.coverUrl;
+    final coverUrl = album.imageUrl;
     return PlayableItem(
       id: '${album.summary.id}/${track.index}',
       title: track.name,
@@ -455,11 +498,14 @@ class PlayerController extends Notifier<PlayerState> {
       albumTitle: e.album.summary.title,
       albumId: e.album.summary.id,
       trackIndex: e.track.index,
-      artUri: e.album.coverUrl != null ? Uri.tryParse(e.album.coverUrl!) : null,
+      artUri: e.album.imageUrl != null ? Uri.tryParse(e.album.imageUrl!) : null,
     );
   }
 
+  @override
   Future<void> pause() => _player.pause();
+
+  @override
   Future<void> play() => _player.play();
 
   Future<void> togglePlayPause() async {
@@ -470,10 +516,34 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> next() => _player.next();
+  /// Advance one track.
+  ///
+  /// The successor is resolved on demand when it is not in the queue yet:
+  /// the queue deliberately holds only the current track plus one prefetched
+  /// successor, so a system "next" that arrives while that prefetch is still
+  /// running used to be a silent no-op — the notification button looked dead.
+  @override
+  Future<void> next() async {
+    final album = _playingAlbum;
+    final current = state.currentIndex;
+    if (album != null && current != null) {
+      final nextIndex = current + 1;
+      if (nextIndex >= album.tracks.length) return; // end of the album
+      if (!_albumIndexOfQueue.contains(nextIndex)) {
+        await _prefetchNext(fromIndex: current);
+        // Resolution failed or was cancelled: stay where we are rather than
+        // jumping to a track we cannot play.
+        if (!_albumIndexOfQueue.contains(nextIndex)) return;
+      }
+    }
+    await _player.next();
+  }
+
+  @override
   Future<void> previous() => _player.previous();
 
   /// Halt playback and drop the queue (media Stop key).
+  @override
   Future<void> stop() async {
     _loadCancelToken?.cancel();
     _prefetchToken?.cancel();
