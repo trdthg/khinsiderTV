@@ -239,6 +239,50 @@ void main() {
       },
     );
 
+    test('never advertises buffering while the track is playing', () async {
+      // Android derives the play/pause icon from `state == STATE_PLAYING`
+      // alone (SystemUI MediaControlPanel.isPlaying). Reporting a buffering
+      // processing state therefore turns the notification's pause button into
+      // a play triangle while the audio is still running - the button the user
+      // needs most (heard on every mid-track re-buffer).
+      final inner = RecordingPlayer();
+      final handler = KhinsiderAudioHandler(player: inner);
+      addTearDown(handler.dispose);
+      inner.queue.add(_item);
+
+      inner.snapshots.add(
+        const AudioPlayerSnapshot(
+          playing: true,
+          currentIndex: 0,
+          processing: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.ready,
+        reason: 'STATE_PLAYING is the only state that yields a pause button',
+      );
+      expect(
+        handler.playbackState.value.controls.map((c) => c.action),
+        contains(MediaAction.pause),
+      );
+
+      // Waiting with nothing playing still deserves the buffering state.
+      inner.snapshots.add(
+        const AudioPlayerSnapshot(
+          playing: false,
+          currentIndex: 0,
+          processing: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.buffering,
+      );
+    });
+
     test('the pause control replaces play once playback pauses', () async {
       final inner = RecordingPlayer();
       final handler = KhinsiderAudioHandler(player: inner);

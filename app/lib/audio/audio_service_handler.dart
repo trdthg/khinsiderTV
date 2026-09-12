@@ -179,10 +179,17 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
         systemActions: const {MediaAction.seek},
         processingState: snap == null
             ? AudioProcessingState.idle
-            : snap.processing
-            ? AudioProcessingState.buffering
             : snap.completed
             ? AudioProcessingState.completed
+            // Never report `buffering` while the track is playing. Android picks
+            // the play/pause icon from `state == STATE_PLAYING` alone
+            // (SystemUI's `MediaControlPanel.isPlaying`), so a buffering state
+            // shows a *play* triangle even though the audio is running — i.e.
+            // the notification has no pause button exactly when the user wants
+            // one (a re-buffer mid-track, or the moment a track starts). The
+            // wait is only worth reporting while nothing is playing.
+            : snap.processing && !playing
+            ? AudioProcessingState.buffering
             : AudioProcessingState.ready,
         playing: playing,
         updatePosition: _lastPosition,

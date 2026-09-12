@@ -224,3 +224,16 @@
       回归测试：`media_session_test.dart` 新增 `production wiring (main.dart)` 一组
       （每条命令只到 impl 一次、系统路径 session → controller → impl、
       应用内 `stop()` 会清掉 `mediaItem`），并给 `BaseAudioPlayer` 加 `items`。
+- [x] **F2 播放中通知栏没有暂停按钮（F1 之外的第二条独立原因）**
+      AOSP 里 SystemUI 的播放/暂停图标只看一个条件：`state == STATE_PLAYING`
+      （`MediaControlPanel.isPlaying`）。而 audio_service 把
+      `AudioProcessingState.buffering` 映射成 `STATE_BUFFERING`（`AudioService.java`
+      的 `getPlaybackState()`），于是**只要上报 buffering，图标就变回「播放三角」**——
+      正在响的时候通知栏反而没有暂停按钮；进度条还在走是因为 `PlaybackState` 的
+      `speed` 仍是 1.0（系统按 `updatePosition + speed` 自行外推）。
+      首次加载（`playing: false`）之后的重新缓冲、以及切歌/预取造成的 `loading`，
+      都会把我们带进这个状态，所以「看不到暂停按钮」很容易复现。
+      修法：`processing` 只在 `playing == false` 时才映射为 `buffering`，
+      播放中一律 `ready` —— 宁可少一个转圈，也不能让「暂停」这个最需要的按钮消失。
+      回归测试：`media_session_test.dart`「never advertises buffering while the track
+      is playing」（变异验证：把条件改回 `snap.processing` 立刻变红）。
