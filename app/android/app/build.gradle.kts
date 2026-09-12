@@ -56,6 +56,12 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // The media notification action icons are resolved *by name* at
+            // runtime, so no static analysis can see that they are used and a
+            // resource shrinker would happily delete them. Keep shrinking off;
+            // res/raw/keep.xml and the R.array reference in MainActivity guard
+            // the same invariant.
+            isShrinkResources = false
         }
     }
 }

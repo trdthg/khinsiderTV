@@ -62,6 +62,56 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
 
   static const Duration _positionPublishInterval = Duration(seconds: 1);
 
+  // ---------------------------------------------------------- media controls
+
+  /// Notification action icons come from **this app's** resources, not from
+  /// audio_service's bundled ones.
+  ///
+  /// Android resolves a control's `androidIcon` by *name* at runtime
+  /// (`AudioService.getResourceId` -> `Resources.getIdentifier`), which no
+  /// static analysis can see. The resource optimizer therefore treats
+  /// audio_service's own drawables as unused and strips them from release APKs
+  /// — verified on the shipped APK: `resources.arsc` contains the app's own
+  /// resource names but none of the `audio_service_*` ones. `getResourceId`
+  /// then returns 0, the notification action is built with a null icon, and
+  /// SystemUI drops it (`MediaDataManager.createActionsFromNotification`:
+  /// `if (action.getIcon() == null) ... continue`) — leaving a media card with
+  /// album art, title and a progress bar but no transport buttons at all.
+  ///
+  /// Keeping the five icons in the app module (with an R-reference from
+  /// MainActivity plus res/raw/keep.xml) makes them survive every build.
+  static const String _iconPlay = 'drawable/khinsider_play';
+  static const String _iconPause = 'drawable/khinsider_pause';
+  static const String _iconSkipPrevious = 'drawable/khinsider_skip_previous';
+  static const String _iconSkipNext = 'drawable/khinsider_skip_next';
+  static const String _iconStop = 'drawable/khinsider_stop';
+
+  static const MediaControl _controlPlay = MediaControl(
+    androidIcon: _iconPlay,
+    label: 'Play',
+    action: MediaAction.play,
+  );
+  static const MediaControl _controlPause = MediaControl(
+    androidIcon: _iconPause,
+    label: 'Pause',
+    action: MediaAction.pause,
+  );
+  static const MediaControl _controlSkipToPrevious = MediaControl(
+    androidIcon: _iconSkipPrevious,
+    label: 'Previous',
+    action: MediaAction.skipToPrevious,
+  );
+  static const MediaControl _controlSkipToNext = MediaControl(
+    androidIcon: _iconSkipNext,
+    label: 'Next',
+    action: MediaAction.skipToNext,
+  );
+  static const MediaControl _controlStop = MediaControl(
+    androidIcon: _iconStop,
+    label: 'Stop',
+    action: MediaAction.stop,
+  );
+
   @override
   void setSystemCommandHandler(SystemMediaCommandHandler? handler) {
     _commands = handler;
@@ -164,14 +214,14 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
     playbackState.add(
       playbackState.value.copyWith(
         controls: [
-          MediaControl.skipToPrevious,
-          playing ? MediaControl.pause : MediaControl.play,
-          MediaControl.skipToNext,
+          _controlSkipToPrevious,
+          playing ? _controlPause : _controlPlay,
+          _controlSkipToNext,
           // Expanded-view only (compact view stays [0,1,2]); it is the way to
           // end the session, since the service stays in the foreground while
           // paused and the notification is therefore not swipe-dismissible on
           // older Android versions.
-          MediaControl.stop,
+          _controlStop,
         ],
         // Compact-view order of [controls]; being explicit keeps play/pause in
         // the middle slot on every OEM.

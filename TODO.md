@@ -240,24 +240,44 @@
 
 ## G. 系统集成（用户反馈第五轮：通知栏 / macOS / 缓存目录）
 
-- [x] **G1 安卓 13/14/15 通知栏只剩封面+标题+进度条，一个按钮都没有**
-      这次不是我们的 `PlaybackState` 有问题（`controls`、`playing`、`queueIndex`、
-      `androidCompactActionIndices` 都是对的），而是 audio_service 的一个上游 bug 撞上了
-      SystemUI 的第二条代码路径。SystemUI 画媒体卡片有两条路：
-      1. **语义 actions**（AOSP 13+ 默认）：`MediaDataManager.createActionsFromState()` 从
-         `PlaybackState.actions` 推导按钮，`MediaControlPanel.setSemanticButton` 判定
-         `showInCompact = SEMANTIC_ACTIONS_COMPACT.contains(buttonId)` —— 与通知无关；
-      2. **通知 actions**（回落到这条时）：按钮列表来自通知的 actions，
-         而**折叠卡片**是否显示由 `setGenericButton(..., showInCompact)` 决定，
-         `showInCompact` 又来自 `MediaDataManager` 读的
-         `notif.extras.getIntArray(Notification.EXTRA_COMPACT_ACTIONS)`。
-      这个 extra 只有 `MediaStyle.setShowActionsInCompactView()` 会写（AOSP 14 的
-      `Notification.MediaStyle.addExtras` 仍在写，不是 no-op），而 audio_service 0.18.19
-      （pub 上最新版）**只在 `Build.VERSION.SDK_INT < 33` 时调用它** —— 于是走第 2 条路径的
-      设备（各 OEM 的 SystemUI 分支）在 Android 13+ 上折叠卡片一个按钮都没有，
-      展开才看得到。这也解释了「只有进度条」：卡片底部的进度条/时长来自 metadata 的
-      duration，与 actions 无关。
-      修法：仓库内 vendored 一份 `packages/audio_service`（0.18.19，`app/pubspec.yaml` 用
+- [x] **G1 安卓通知栏只剩封面+标题+进度条，一个按钮都没有**
+      **真正的根因：通知 action 的图标被资源优化删掉了。**
+      `MediaControl.androidIcon` 是**运行时按名字**解析的
+      （`AudioService.getResourceId` → `Resources.getIdentifier`），静态分析看不到这次引用，
+      于是 release 构建里 audio_service 自带的 `audio_service_*` drawable 被当成无用资源删掉。
+      实测（解析 APK 里 `resources.arsc` 的字符串池）：v0.1.21 的 APK 里有 app 自己的资源名
+      （`launch_background`、`network_security_config`…）也有 androidx 的
+      （`accessibility_custom_action_*`、`notification_background`…），
+      但 **`audio_service_pause` / `play_arrow` / `skip_previous` / `skip_next` / `stop` 一个都没有**；
+      v0.1.20（pub 上的插件、尚未 vendored）完全一样 —— 所以这是从第一轮反馈
+      「安卓没法从系统的弹窗上面控制播放的暂停下一首」起就一直存在的 bug。
+      图标找不到 → `getResourceId` 返回 0 → action 的 icon 为 null → SystemUI 直接把 action 丢掉
+      （AOSP `MediaDataManager.createActionsFromNotification`:
+      `if (action.getIcon() == null) { actionsToShowCollapsed.remove(index); continue }`），
+      于是卡片上封面/标题/进度条都在（进度条来自 metadata 的 duration，与 actions 无关），
+      **按钮一个都没有**，折叠展开都一样。这也解释了为什么早先那版「补
+      `EXTRA_COMPACT_ACTIONS`」的修法没用：actions 在进入 compact 逻辑之前就已经被丢掉了。
+      修法（三层保险）：
+      1. 5 个 action 图标作为**矢量图放进 app 模块**
+         `app/android/app/src/main/res/drawable/khinsider_{play,pause,skip_previous,skip_next,stop}.xml`，
+         `KhinsiderAudioHandler` 用自定义 `MediaControl(androidIcon: 'drawable/khinsider_*')`
+         （app 自己的资源一定进包，已实测确认）；
+      2. `res/values/media_action_icons.xml` 里一个 array 引用这 5 个 drawable，
+         并在 `MainActivity` 里读 `R.array.media_action_icons` —— 让优化器认为它们被使用；
+      3. `res/raw/keep.xml` 的 `tools:keep` 兜底 + release 显式 `isShrinkResources = false`。
+      回归测试：`media_session_test.dart`「every control icon exists in the app module」
+      逐条断言 `controls` 里每个 `androidIcon` 都①在 app 模块有同名文件、
+      ②出现在 keep 列表里、③不是 `audio_service_*`。
+      另外保留（次要保险，针对 SystemUI 的「通知 actions」回落路径）那条 vendored 补丁：
+      SystemUI 画媒体卡片有两条路 ——
+      1. **语义 actions**：`MediaDataManager.createActionsFromState()` 从 `PlaybackState.actions`
+         推导按钮，`MediaControlPanel.setSemanticButton` 判定
+         `showInCompact = SEMANTIC_ACTIONS_COMPACT.contains(buttonId)`，与通知无关；
+      2. **通知 actions**（回落）：折叠卡片是否显示按钮由 `setGenericButton(..., showInCompact)`
+         决定，`showInCompact` 来自 `notif.extras.getIntArray(Notification.EXTRA_COMPACT_ACTIONS)`，
+         而这个 extra 只有 `MediaStyle.setShowActionsInCompactView()` 会写，
+         audio_service 0.18.19（pub 最新版）只在 `SDK_INT < 33` 时调用它。
+      于是仓库内 vendored 一份 `packages/audio_service`（`app/pubspec.yaml` 用
       `dependency_overrides` 指过去），把那句改成**无条件调用**，并按实际 action 数量
       裁剪/过滤下标（框架对越界下标会抛 `IllegalArgumentException`）。
       语义路径上多一个 extra 完全无副作用，所以两条路径都安全。

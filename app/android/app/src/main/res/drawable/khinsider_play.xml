@@ -1,0 +1,15 @@
+<!-- Notification action icon. Lives in the APP module because audio_service's
+     bundled drawables are dropped from release APKs (they are referenced by
+     name at runtime only), which leaves every notification action without an
+     icon - and SystemUI silently drops null-icon actions. See
+     lib/audio/audio_service_handler.dart and values/media_action_icons.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,5v14l11,-7z" />
+</vector>

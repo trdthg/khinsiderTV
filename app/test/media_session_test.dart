@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:dio/dio.dart';
@@ -302,6 +303,48 @@ void main() {
         handler.playbackState.value.controls.map((c) => c.action),
         isNot(contains(MediaAction.pause)),
       );
+    });
+
+    test('every control icon exists in the app module (not the plugin)', () async {
+      final inner = RecordingPlayer();
+      final handler = KhinsiderAudioHandler(player: inner);
+      addTearDown(handler.dispose);
+
+      inner.queue.add(_item);
+      inner.snapshots.add(
+        const AudioPlayerSnapshot(playing: true, currentIndex: 0),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final controls = handler.playbackState.value.controls;
+      expect(controls, isNotEmpty);
+
+      // audio_service resolves these names at runtime (`getResourceIdentifier`),
+      // so nothing in the build can tell they are used: the plugin's own
+      // drawables are stripped from release APKs and SystemUI then drops every
+      // action that has a null icon. Ours must therefore live in the app module
+      // and be referenced from values/media_action_icons.xml as well.
+      final keeplist = File(
+        'android/app/src/main/res/values/media_action_icons.xml',
+      ).readAsStringSync();
+      for (final control in controls) {
+        expect(
+          control.androidIcon,
+          startsWith('drawable/khinsider_'),
+          reason: 'controls must not use audio_service\'s stripped drawables',
+        );
+        final name = control.androidIcon.split('/').last;
+        expect(
+          File('android/app/src/main/res/drawable/$name.xml').existsSync(),
+          isTrue,
+          reason: '$name.xml is missing from the app module',
+        );
+        expect(
+          keeplist,
+          contains('@drawable/$name'),
+          reason: '$name must be referenced so the resource optimizer keeps it',
+        );
+      }
     });
   });
 

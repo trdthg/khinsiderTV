@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keeps the notification action icons that are resolved by NAME at runtime
+     (AudioService.getResourceId -> Resources.getIdentifier). A resource that
+     is only referenced that way looks unused to the resource optimizer, which
+     is exactly how audio_service's own drawables disappeared from release
+     APKs. Referenced from MainActivity as well, so the array itself is used. -->
+<resources>
+    <array name="media_action_icons">
+        <item>@drawable/khinsider_play</item>
+        <item>@drawable/khinsider_pause</item>
+        <item>@drawable/khinsider_skip_previous</item>
+        <item>@drawable/khinsider_skip_next</item>
+        <item>@drawable/khinsider_stop</item>
+    </array>
+</resources>

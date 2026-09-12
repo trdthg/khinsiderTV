@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Belt and braces for the resource shrinker: the media notification action
+     icons are only referenced by name from Java (MediaControl.androidIcon). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/khinsider_play,@drawable/khinsider_pause,@drawable/khinsider_skip_previous,@drawable/khinsider_skip_next,@drawable/khinsider_stop,@drawable/audio_service_*" />

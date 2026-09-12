@@ -16,6 +16,19 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : AudioServiceActivity() {
+    /**
+     * The media notification action icons.
+     *
+     * audio_service resolves a control's icon by name at runtime
+     * (`Resources.getIdentifier`), which looks unused to the resource
+     * optimizer - that is how the plugin's own drawables vanished from release
+     * APKs, leaving every notification action with a null icon (SystemUI then
+     * drops the action entirely, so the media card showed no buttons at all).
+     * Referencing the array here keeps the icons reachable.
+     */
+    @Suppress("unused")
+    private val mediaActionIcons = R.array.media_action_icons
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.khinsider/update")
