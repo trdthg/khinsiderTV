@@ -5,11 +5,19 @@ A simple client for the [khinsider](https://downloads.khinsider.com) website.
 English · [中文](README.zh-CN.md)
 
 Download the latest `v*` release from [Releases](https://github.com/trdthg/khinsiderTV/releases):
-Android (armv7 / arm64 / universal APK), macOS, Windows, Linux / Steam Deck (flatpak).
+Android (armv7 / arm64 / universal APK), iOS, macOS, Windows, Linux / Steam Deck (flatpak).
 
 ## Status
 
-I have tested it on Android / macOS / Windows / Chromecast and it runs on all of them.
+I have tested it on Android / iOS / macOS / Windows / Chromecast and it runs on all of them.
+
+## Architecture / Design
+
+The software contains two parts: a GUI, and the khinsider API, which fetches its data by parsing HTML. There are basically just two things in it — search, and fetching album information — so I think it could even support several data sources, other sites included.
+
+* As far as possible I want all of it — the downloaded audio and the cached search results and images — to live directly in the `Music` folder, so the user can copy it, wipe it or do anything else with it.
+* Playback streams while a track is downloading, and the next track is prefetched once one starts playing, so it stays smooth.
+* There is no "download this album" button on purpose: khinsider is effectively a public-service site, and I do not want to hammer its servers (especially if you would not even treat everything you downloaded with care). Please respect the site itself too.
 
 ## Why Flutter
 
@@ -29,16 +37,11 @@ SDL? Not for now...
 
 Anyway, my role model is LocalSend: it is very simple and beautiful, and I hope this software can be like that too.
 
-## Architecture
-
-The software contains two parts: a GUI, and the khinsider API, which fetches its data by parsing HTML. There are basically just two things in it — search, and fetching album information — so I think it could even support multiple data sources.
+## Implementation
 
 The client is a Flutter app plus a pure-Dart data package, designed around a strict three-layer Clean Architecture.
 The full layer, data-flow, focus-system and state overview is in [ARCHITECTURE.md](ARCHITECTURE.md).
-
-The goal for storage is for all of it — the downloaded audio, the cached search results and images — to live directly in the `Music` folder, so the user can copy or wipe it with any file manager.
-
-Focus is handled explicitly rather than by Flutter's geometry-based arrow traversal, which on a TV lands on faded or off-screen containers and makes the remote look dead.
+Focus is laid out explicitly rather than left to Flutter's geometry-based arrow traversal, which on a TV lands on faded or off-screen containers and makes the remote look dead.
 
 ```
 khinsider/
