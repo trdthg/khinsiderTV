@@ -76,7 +76,30 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // How the UI should behave on this device. TV layouts need their own
+        // on-screen keyboard (see [isTelevision]).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.khinsider/platform")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isTelevision" -> result.success(isTelevision())
+                    else -> result.notImplemented()
+                }
+            }
     }
+
+    /**
+     * Whether this device is a TV (Android TV / Google TV / Fire TV).
+     *
+     * TV layouts type with the app's own on-screen keyboard: the system IME
+     * they would otherwise show cannot be reached with a remote, because no
+     * Flutter text field can hand the D-pad over to it (the framework consumes
+     * arrow keys for focus traversal and caret movement first, so the key never
+     * reaches the window manager).
+     */
+    private fun isTelevision(): Boolean =
+        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
 
     private fun canWritePublicMusic(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

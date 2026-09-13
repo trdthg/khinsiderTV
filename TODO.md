@@ -341,3 +341,52 @@
         播放器反应过来之前弹回旧位置。
       回归测试：`media_session_test.dart` 新增两条（跳转立即发布 / 普通 tick 仍被节流；
       seek 先发布目标）。
+
+## I. Google TV 搜索 + 存储 API（用户反馈第七轮）
+
+- [x] **I1 Google TV 上搜索用不了（焦点进不了系统键盘 / 第二次打开键盘不出来）**
+      根因是「Flutter 的文本框永远没法把方向键交给系统 IME」：
+      Android TV 的系统键盘是**另一个窗口**，遥控器的「下」本该把焦点交给它，
+      但这个按键会先被 Flutter 框架消费掉 —— `WidgetsApp` 的默认快捷键把方向键绑成
+      `DirectionalFocusIntent`（`app.dart:1281`），`DefaultTextEditingShortcuts` 又把它绑成
+      移动光标，两者都在应用内消化，按键根本到不了 Android 的窗口管理器。
+      所以「键盘弹出来了但按不下去」是必然的；第二次「键盘不出来」同源：
+      系统 IME 只在字段**获得焦点的瞬间**请求一次，字段一直有焦点就不会再出现。
+      修法：TV 上不再用系统 IME，改成应用自绘键盘：
+      * `MainActivity` 新增 `dev.khinsider/platform` channel 的 `isTelevision`
+        （`FEATURE_LEANBACK` / `FEATURE_TELEVISION`）；
+      * `main.dart` 在**第一帧之前**解析它并覆盖 `isTelevisionProvider`
+        （不能先 false 后 true，否则 TV 上会闪一下系统键盘）；
+      * 新组件 `lib/ui/search/tv_keyboard.dart`：Leanback 风格键盘
+        （数字行 + 三行字母 + Space/Delete/Clear/Search/Hide），每个键是 `DpadTile`，
+        第一个键 autofocus（遥控器一进搜索页就能直接按）；面板外层 `Focus.onKeyEvent`
+        让物理键盘照样能打字；
+      * 搜索页在 TV 上把字段设成 `readOnly`（不请求 IME）、`autofocus: false`；
+        Enter/Select 打开键盘；Back（`PopScope`）先收键盘再退出搜索；
+        提交后自动收键盘、把焦点还给结果；
+      * 手机/桌面完全不变（`isTelevision == false` 仍是原来的可编辑字段）。
+      回归测试：`test/tv_search_test.dart` 6 条（进入即聚焦第一个键、增删清空、
+      Search 提交、Hide/Escape 收起 + Enter 重开、物理键盘可打字、非 TV 不变）。
+- [ ] **I2 用 MediaStore 免权限写 `Music/`（替代「所有文件访问」）—— 待定方案**
+      事实核对：Android 10+ 应用**不需要任何权限**就能往 `MediaStore.Audio` 插入自己的音频
+      （`RELATIVE_PATH = Music/KHInsider` + `IS_PENDING`），Android 11+ 还能改/删自己的贡献；
+      读回自己插入的文件同样不需要权限（**重装后**那些文件算「别人的」，那时才需要
+      `READ_MEDIA_AUDIO`（13+）/`READ_EXTERNAL_STORAGE`（≤12））。
+      但当前实现不是换个 API 就行：
+      * 下载是 just_audio 的 `LockCachingAudioSource` 干的，它要一个**文件路径**做
+        `cacheFile`（`just_audio_player_impl.dart` 的 `_sourceFor`），MediaStore 只给
+        `content://`，没有路径；
+      * `AudioCacheManager` 整层是路径式 API（`root()` 返回 `Directory`、
+        `fileFor/fileForSync/categoryDirSync`、`totalSize` 遍历、专辑清单与封面写文件），
+        要换成 URI 得重写这一层和所有调用点；
+      * 播放侧可行：just_audio 用 ExoPlayer 的 `DefaultDataSource`（`AudioPlayer.java:749`），
+        支持 `content://` —— 但没有设备可验证 seek / 缓存交互 / 重名改名 / 重装归属。
+      可选方案（按工作量与风险）：
+      * **A. 导出**：缓存仍在私有目录，用户对一个专辑点「导出到 Music」时写进 MediaStore
+        （复制 → 双份空间；或播放结束后移动 → 单份但要处理「正在播的文件被搬走」）；
+        播放路径零改动，风险最低。
+      * **B. 重写缓存层**：自己下载直接落 MediaStore，播放改用 `content://`，
+        缓存徽标/清单/FLAC/迁移全跟着改；最"正确"、单份空间，但没有设备可验证，风险最高。
+      * **C. 保持现状**（「所有文件访问」+ 路径式缓存）：能用、零风险，但要用户在系统设置里
+        开一个比较吓人的开关。
+      待用户选 A / B / C 后再实现。

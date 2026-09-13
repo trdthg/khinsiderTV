@@ -12,6 +12,7 @@ import 'audio/audio_cache_manager.dart';
 import 'audio/audio_service_handler.dart';
 import 'audio/base_audio_player.dart';
 import 'audio/just_audio_player_impl.dart';
+import 'core/platform/device.dart';
 import 'data/update_service.dart';
 import 'state/player_controller.dart';
 import 'state/track_cache_controller.dart';
@@ -106,12 +107,17 @@ Future<void> main() async {
     });
   }
 
+  // Resolved before the first frame: a TV must not open the system keyboard
+  // even once, so the search screen cannot start out believing it is a phone.
+  final isTelevision = await resolveIsTelevision();
+
   runApp(
     ProviderScope(
       overrides: [
         audioPlayerProvider.overrideWithValue(transport),
         mediaSessionProvider.overrideWithValue(session),
         audioCacheManagerProvider.overrideWithValue(cache),
+        isTelevisionProvider.overrideWithValue(isTelevision),
       ],
       child: const KhinsiderApp(),
     ),

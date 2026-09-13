@@ -4,12 +4,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
+import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/search_controller.dart';
+import 'tv_keyboard.dart';
 
 /// Search screen: text field + responsive album grid (list on narrow /
 /// portrait layouts, grid on TV / landscape).
+///
+/// TVs cannot use the system IME (see [TvKeyboard]), so there the field is
+/// read-only and a D-pad navigable keyboard is shown instead — open on entry,
+/// because a remote has no other way to type.
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -24,6 +30,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     onKeyEvent: _onSearchKey,
   );
 
+  /// Whether the TV on-screen keyboard is up. Always false off TV.
+  late bool _keyboardOpen;
+
+  /// Whether this is a TV: the layout that must not touch the system IME.
+  late final bool _tv;
+
+  @override
+  void initState() {
+    super.initState();
+    _tv = ref.read(isTelevisionProvider);
+    // A remote cannot type into a field, so the keyboard is already up when the
+    // screen opens; Enter on the field brings it back after "Hide".
+    _keyboardOpen = _tv;
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -31,9 +52,56 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.dispose();
   }
 
+  void _setKeyboardOpen(bool open) {
+    if (_keyboardOpen == open) return;
+    setState(() => _keyboardOpen = open);
+  }
+
+  void _append(String character) {
+    _controller.value = TextEditingValue(
+      text: _controller.text + character,
+      selection: TextSelection.collapsed(
+        offset: _controller.text.length + character.length,
+      ),
+    );
+  }
+
+  void _backspace() {
+    final text = _controller.text;
+    if (text.isEmpty) return;
+    _controller.value = TextEditingValue(
+      text: text.substring(0, text.length - 1),
+      selection: TextSelection.collapsed(offset: text.length - 1),
+    );
+  }
+
   KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.arrowDown) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+
+    if (_tv) {
+      // The field is read-only here, so it is both the way back to the keyboard
+      // and the place that has to accept a physical keyboard's characters.
+      if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.select ||
+          key == LogicalKeyboardKey.gameButtonA) {
+        _setKeyboardOpen(true);
+        return KeyEventResult.handled;
+      }
+      final character = event.character;
+      if (character != null &&
+          character.length == 1 &&
+          character.codeUnitAt(0) >= 0x20) {
+        _append(character);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.backspace) {
+        _backspace();
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (key == LogicalKeyboardKey.arrowDown) {
       // On the narrow layout the field sits BELOW the results, so "into the
       // results" is the upward direction there.
       final moved = FocusScope.of(context).focusInDirection(
@@ -52,6 +120,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (preset != null) _controller.text = preset;
     ref.read(searchControllerProvider.notifier).search(_controller.text);
     ref.read(searchHistoryProvider.notifier).record(_controller.text);
+    // The results are the point of pressing Search: hand focus back to them.
+    _setKeyboardOpen(false);
   }
 
   @override
@@ -65,7 +135,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         children: [
           Expanded(
             child: TextField(
-              autofocus: true,
+              // TVs type with [TvKeyboard]: a Flutter text field can never let
+              // a remote reach the system IME, and that is what the keyboard
+              // below replaces.
+              readOnly: _tv,
+              autofocus: !_tv,
               focusNode: _searchFocus,
               controller: _controller,
               textInputAction: TextInputAction.search,
@@ -87,14 +161,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
     );
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (!narrow) searchBar,
-            Expanded(child: _buildBody(context, state, reverse: narrow)),
-            if (narrow) searchBar,
-          ],
+    return PopScope(
+      // On a TV, Back means "hide the keyboard" before it means "leave search".
+      canPop: !(_tv && _keyboardOpen),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _setKeyboardOpen(false);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (!narrow) searchBar,
+              Expanded(child: _buildBody(context, state, reverse: narrow)),
+              if (narrow) searchBar,
+              if (_tv && _keyboardOpen)
+                TvKeyboard(
+                  onKey: _append,
+                  onBackspace: _backspace,
+                  onClear: () => _controller.clear(),
+                  onSubmit: _submit,
+                  onClose: () => _setKeyboardOpen(false),
+                ),
+            ],
+          ),
         ),
       ),
     );

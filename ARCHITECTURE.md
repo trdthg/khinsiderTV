@@ -89,6 +89,7 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 封面统一用 `thumbs_large`（200×200） | 页面只会给最小的那档：搜索结果 `thumbs_small` 60×60、专辑页 `/thumbs/` 117×117，画到 140–200px 卡片和 252px 封面上明显发虚。站点把同一张图预渲染了多档，**只有目录段不同**，改一下路径就能取 200×200（~15–80KB），不用额外请求；原图则可能到 10MB（3000×3000 PNG），绝不能进列表。见 `KhinsiderImage`，模型上统一暴露 `imageUrl` |
 | 触摸/鼠标/键盘的反馈按 `FocusManager.highlightMode` 分流 | 手指不会 hover，而点击后留在方块上的焦点环会被当成「选中」，还清不掉。`touch` 模式（手机/平板，或桌面没接鼠标）不画焦点环与悬停底色，改用水波纹；`traditional`（键盘/遥控/鼠标）行为完全不变。跟 Flutter 自己的 Material 组件同一条规则 |
 | 水波纹手绘在内容**之上**的透明 `Material` 里 | Material 的 ink 画在它包裹的 child **下面**（`_RenderInkFeatures.paint`），直接套 `InkWell` 会被不透明的卡片/封面盖住。所以墨层是 `Stack` 的最后一个孩子并套 `IgnorePointer`（不能抢走方块内部控件的手势），ink feature 由 `_handleTapDown/Up/Cancel` 手动驱动；离开屏幕时在 `deactivate` 里 dispose（`dispose` 时机太晚，Material 已经先被卸载 → ticker 泄漏） |
+| TV 布局用**自绘键盘**，绝不碰系统 IME | Android TV 的系统键盘是**另一个窗口**，遥控器的「下」本该把焦点交给它，但这个按键会先被 Flutter 消费：`WidgetsApp` 的默认快捷键把方向键绑成 `DirectionalFocusIntent`（`app.dart:1281`）、`DefaultTextEditingShortcuts` 又绑成移动光标，两者都在应用内消化，按键到不了 Android 的窗口管理器 —— 于是「键盘弹出来但按不下去」是必然的；而「第二次进搜索页键盘不出来」同源：系统 IME 只在字段**获得焦点的瞬间**请求一次，字段一直有焦点就不会重现。所以 TV 上搜索框是 `readOnly`（不请求 IME、`autofocus: false`），输入交给 `TvKeyboard`（`lib/ui/search/tv_keyboard.dart`：`DpadTile` 网格，第一个键 autofocus，面板外层 `Focus.onKeyEvent` 让物理键盘照样能打字），Enter/Select 打开、Back(`PopScope`) 先收键盘、提交后自动收起。`isTelevision` 由 `dev.khinsider/platform` 提供，并在**第一帧之前**于 `main.dart` 解析后覆盖 `isTelevisionProvider`（否则 TV 上会先闪一次系统键盘）。手机/桌面完全不变 |
 
 ## 焦点与快捷键
 
