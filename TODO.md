@@ -467,3 +467,43 @@
       （再按 Select 得到 `1`）。
 - 教训：TV 相关的 UI 测试要用真实 TV 的**逻辑分辨率**跑，默认 800×600 会把这类
   几何相关的走位问题盖过去。
+
+## K. 焦点系统：别让焦点跑到看不见的地方（用户反馈第九轮）
+
+- [x] **K1 禅模式按右键 / 列表到底按向下，焦点「不知道跑哪去了」**
+      实测（`test/tv_focus_test.dart`，1280×800）：从封面按右，焦点落在
+      `album-page` 这个**页面级容器 Focus 节点**上 —— 它铺满整屏、什么都不画，
+      所以焦点环消失、遥控器看起来像死了。同一个原因还有两处：
+      * `IgnorePointer` 只挡指针，**不挡焦点**：禅模式里已经淡出的 header
+        （返回键、刷新键）和往左飞走的 info panel 里的按钮，仍然是方向键的目标；
+      * related albums 那一段在禅模式里正在飞出去，tile 还挂在树上，同样能被选中。
+      修法：
+      * 所有**容器** Focus 加 `skipTraversal: true`（`album-page`、背景 wrapper、
+        OSD 菜单的容器）——显式 `requestFocus`/autofocus 照旧有效，但方向遍历
+        再也不会落在它们身上；
+      * 淡出的 header / info panel 用 `ExcludeFocus(excluding: zen)`；
+      * 禅模式里飞走的 related 行用 `ExcludeFocus(excluding: isZen)`。
+- [x] **K2 从封面按右，应该锁到第一个曲目（之前锁到了第一个相关专辑）**
+      方向键此前完全交给 Flutter 的几何遍历，它按坐标挑「最近的那个」，
+      于是挑到了下面的相关专辑。新增 `lib/core/widgets/dpad_nav.dart`：
+      ```dart
+      DpadNav(right: rowFocusNodes.first, child: DpadTile(...))
+      ```
+      明确指定某个方向的目标；**没有指定**的方向原样交还给默认遍历，
+      所以区域内部的上/下行为不变。
+- [x] **K3 从曲目行按左，锁不到专辑封面**
+      `AlbumTrackList` 早就留了 `onLeftArrow` 钩子（原来只在别处用过），
+      但专辑页从来没传给它，左键就一直走几何遍历（被 info panel 抢走）。
+      现在传 `() => coverFocus.requestFocus()`。
+- [x] **K4 ChromeOS 上选不中「自动更新」横幅**
+      横幅里的按钮是 `TextButton`/`IconButton`：可聚焦，但没有一条明确的路径把焦点
+      送进去（要从下面的内容几何遍历），而且 Material 的焦点提示在 banner 底色上
+      几乎看不见。现在按钮全部换成 `DpadTile`（应用一贯的焦点环）+ 各自的
+      `FocusNode`（`update-action` / `update-view` / `update-close`），并用
+      `DpadNav` 左右互跳；关闭键用 `DpadIconButton`。按下/选择仍然走原来的逻辑。
+- 回归测试：`test/tv_focus_test.dart` 5 条（封面→第一个曲目、禅模式行→左→封面、
+  禅模式右/到底不丢焦点、普通模式 related 仍可用向下走到、更新横幅可被 D-pad 走到）。
+- 教训：**不要指望几何方向遍历**。TV 上凡是「区域」级别的走位（封面↔列表↔相关专辑↔
+  横幅），都要像 `TvKeyboard` 那样自己说了算；容器节点（什么都画不出来的那种）
+  必须 `skipTraversal`，否则它一定会成为目标，然后把焦点环吃掉。
+

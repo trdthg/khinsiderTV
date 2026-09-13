@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import '../../core/platform/device.dart';
+import '../../core/widgets/dpad_nav.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/track_cache_controller.dart';
@@ -375,6 +376,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
     // even when "there is no focus" on the page.
     return Focus(
       autofocus: true,
+      skipTraversal: true,
       debugLabel: 'album-page',
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
@@ -390,6 +392,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
           // Background content (unfocusable while the OSD menu is open).
           Focus(
             canRequestFocus: false,
+            skipTraversal: true,
             descendantsAreFocusable: !widget.menuOpen,
             child: ListenableBuilder(
               listenable: widget.zenT,
@@ -449,36 +452,39 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                         height: headerH,
                         child: Opacity(
                           opacity: (1 - t).clamp(0.0, 1.0),
-                          child: IgnorePointer(
-                            ignoring: widget.zen,
-                            child: Row(
-                              children: [
-                                BackButton(
-                                  // Used to be `onPressed: widget.zen ? null
-                                  // : ...`, which disabled the button in zen
-                                  // mode; back always means "one level out".
-                                  onPressed: _onBack,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    album.summary.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleLarge,
+                          child: ExcludeFocus(
+                            excluding: widget.zen,
+                            child: IgnorePointer(
+                              ignoring: widget.zen,
+                              child: Row(
+                                children: [
+                                  BackButton(
+                                    // Used to be `onPressed: widget.zen ? null
+                                    // : ...`, which disabled the button in zen
+                                    // mode; back always means "one level out".
+                                    onPressed: _onBack,
                                   ),
-                                ),
-                                DpadIconButton(
-                                  tooltip: 'Force refresh (bypass cache)',
-                                  icon: Icons.refresh,
-                                  onPressed: widget.zen
-                                      ? null
-                                      : widget.onRefresh,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      album.summary.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                  ),
+                                  DpadIconButton(
+                                    tooltip: 'Force refresh (bypass cache)',
+                                    icon: Icons.refresh,
+                                    onPressed: widget.zen
+                                        ? null
+                                        : widget.onRefresh,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -487,18 +493,23 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                       // menu in zen mode).
                       Positioned.fromRect(
                         rect: coverRect,
-                        child: DpadTile(
-                          focusNode: widget.coverFocus,
-                          autofocus: false,
-                          onSelect: () {
-                            if (widget.zen) {
-                              widget.onToggleMenu();
-                            }
-                          },
-                          child: NowPlayingArt(
-                            coverUrl: album.imageUrl,
-                            size: coverRect.width,
-                            vinylOpacity: t,
+                        child: DpadNav(
+                          right: widget.rowFocusNodes.isEmpty
+                              ? null
+                              : widget.rowFocusNodes.first,
+                          child: DpadTile(
+                            focusNode: widget.coverFocus,
+                            autofocus: false,
+                            onSelect: () {
+                              if (widget.zen) {
+                                widget.onToggleMenu();
+                              }
+                            },
+                            child: NowPlayingArt(
+                              coverUrl: album.imageUrl,
+                              size: coverRect.width,
+                              vinylOpacity: t,
+                            ),
                           ),
                         ),
                       ),
@@ -524,6 +535,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                             showRelated: !widget.zen || widget.zenT.value < 1.0,
                             zenT: widget.zenT,
                             isZen: widget.zen,
+                            onLeftArrow: () => widget.coverFocus.requestFocus(),
                           ),
                         ),
                       ),
@@ -535,9 +547,12 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                           width: 252,
                           child: Opacity(
                             opacity: infoOpacity,
-                            child: IgnorePointer(
-                              ignoring: widget.zen,
-                              child: _InfoPanel(album: album),
+                            child: ExcludeFocus(
+                              excluding: widget.zen,
+                              child: IgnorePointer(
+                                ignoring: widget.zen,
+                                child: _InfoPanel(album: album),
+                              ),
                             ),
                           ),
                         ),

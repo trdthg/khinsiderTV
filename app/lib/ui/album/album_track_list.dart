@@ -103,9 +103,17 @@ class AlbumTrackList extends ConsumerWidget {
               i -= 1;
             }
             if (showRelatedRow && i == album.tracks.length) {
-              return RelatedAlbumsRow(
-                albums: album.relatedAlbums,
-                exitT: exitT,
+              // In zen mode the tail is on its way out: it stays mounted so it
+              // can fly away, but it must not accept focus — otherwise the
+              // remote lands on tiles that are sliding off the screen and the
+              // ring disappears (Down on the last track used to do exactly
+              // that).
+              return ExcludeFocus(
+                excluding: isZen,
+                child: RelatedAlbumsRow(
+                  albums: album.relatedAlbums,
+                  exitT: exitT,
+                ),
               );
             }
             final track = album.tracks[i];

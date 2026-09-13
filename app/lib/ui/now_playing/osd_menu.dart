@@ -38,6 +38,7 @@ class OsdMenu extends ConsumerWidget {
           child: FocusTraversalGroup(
             child: Focus(
               canRequestFocus: false,
+              skipTraversal: true,
               onKeyEvent: (node, event) {
                 if (event is KeyDownEvent &&
                     (event.logicalKey == LogicalKeyboardKey.escape ||

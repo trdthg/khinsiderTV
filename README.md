@@ -36,6 +36,10 @@ The software contains two parts: a GUI, and the khinsider API, which fetches its
 The client is a Flutter app plus a pure-Dart data package, designed around a strict three-layer Clean Architecture.
 The full layer, data-flow, focus-system and state overview is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+The goal for storage is for all of it — the downloaded audio, the cached search results and images — to live directly in the `Music` folder, so the user can copy or wipe it with any file manager.
+
+Focus is handled explicitly rather than by Flutter's geometry-based arrow traversal, which on a TV lands on faded or off-screen containers and makes the remote look dead.
+
 ```
 khinsider/
 ├── app/                        # Flutter client
