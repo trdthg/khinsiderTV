@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
+import '../../audio/music_export.dart';
+import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/track_cache_controller.dart';
@@ -588,7 +590,7 @@ class _InfoPanel extends ConsumerWidget {
           AlbumMetadataPanel(metadata: album.metadata!),
         ],
         const SizedBox(height: 16),
-        _CacheFolderHint(albumId: album.summary.id),
+        _CacheFolderHint(album: album),
       ],
     );
   }
@@ -669,11 +671,24 @@ class _MobileAlbumHeader extends ConsumerWidget {
                         ),
                       ),
                     const SizedBox(height: 8),
-                    // Align to the left so the button keeps its natural width
+                    // Align to the left so the buttons keep their natural width
                     // instead of stretching across the column.
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: _FavoriteButton(album: album.summary),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _FavoriteButton(album: album.summary),
+                          // The phone header is where this is discoverable: the
+                          // cache-folder row sits inside "Album details", which
+                          // albums without metadata do not even render.
+                          if (ref
+                              .watch(audioCacheManagerProvider)
+                              .supportsPublicMusicFolder)
+                            _ExportToMusicButton(album: album),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -702,10 +717,7 @@ class _MobileAlbumHeader extends ConsumerWidget {
                   // side panel shows it inline as before. Only this (phone)
                   // layout offers the Android public-Music-folder switch, so
                   // the wide desktop/TV layout is untouched.
-                  _CacheFolderHint(
-                    albumId: album.summary.id,
-                    offerPublicMusic: true,
-                  ),
+                  _CacheFolderHint(album: album, offerPublicMusic: true),
                 ],
               ),
             ),
@@ -762,12 +774,9 @@ class _FavoriteButton extends ConsumerWidget {
 /// (`Music/KHInsider/<Album>/mp3|flac|image|other`), so the user can find,
 /// export, delete or play them with another player.
 class _CacheFolderHint extends ConsumerWidget {
-  const _CacheFolderHint({
-    required this.albumId,
-    this.offerPublicMusic = false,
-  });
+  const _CacheFolderHint({required this.album, this.offerPublicMusic = false});
 
-  final String albumId;
+  final Album album;
 
   /// Whether this layout may offer to store the cache in the system `Music/`
   /// folder. Only the phone layout sets it: the wide desktop/TV layout keeps
@@ -776,6 +785,7 @@ class _CacheFolderHint extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final albumId = album.summary.id;
     final cache = ref.watch(albumCacheProvider);
     if (cache.albumId != albumId) return const SizedBox.shrink();
     final path = cache.folderPath;
@@ -784,6 +794,14 @@ class _CacheFolderHint extends ConsumerWidget {
     final canRelocate =
         offerPublicMusic &&
         ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder;
+    // Exporting goes through MediaStore, so it needs no all-files-access
+    // toggle — but only Android has that route, and a TV has no Music folder
+    // to show it in. Phone layouts get their own button in the album header
+    // instead (see _ExportToMusicButton), so this row does not repeat it.
+    final canExport =
+        ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder &&
+        !ref.watch(isTelevisionProvider) &&
+        !offerPublicMusic;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
@@ -812,6 +830,13 @@ class _CacheFolderHint extends ConsumerWidget {
               ),
             ),
           ),
+          if (canExport)
+            DpadIconButton(
+              tooltip: 'Export cached tracks to the system Music folder',
+              iconSize: 16,
+              icon: Icons.library_music_outlined,
+              onPressed: () => exportAlbumToMusic(context, ref, album),
+            ),
           if (canRelocate)
             DpadIconButton(
               tooltip: 'Save the cache in the system Music folder',
@@ -832,6 +857,149 @@ class _CacheFolderHint extends ConsumerWidget {
                       context,
                     ).showSnackBar(SnackBar(content: Text('Copied: $path')));
                   },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Android only: copy this album's cached tracks into the system `Music/`
+/// folder. The album header shows it on phone layouts, the cache row shows it
+/// as an icon on wide ones, and a TV shows neither.
+class _ExportToMusicButton extends ConsumerWidget {
+  const _ExportToMusicButton({required this.album});
+
+  final Album album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(isTelevisionProvider)) return const SizedBox.shrink();
+    return Tooltip(
+      message:
+          'Copy the downloaded tracks into Music/KHInsider. No permission '
+          'needed.',
+      child: OutlinedButton.icon(
+        onPressed: () => exportAlbumToMusic(context, ref, album),
+        icon: const Icon(Icons.library_music_outlined, size: 18),
+        label: const Text('Export to Music'),
+      ),
+    );
+  }
+}
+
+/// Copies [album]'s cached tracks into `Music/KHInsider/<Album>`.
+///
+/// The files are contributed through MediaStore, which on Android 10+ needs no
+/// permission at all — that is the whole point: the user does not have to flip
+/// the "all files access" switch for their music to show up in the system music
+/// library. (Older Androids write into `Music/` directly and are already
+/// visible, so the exporter reports them as unsupported instead of duplicating.)
+///
+/// The outcome is reported in a dialog rather than a `SnackBar`: the album
+/// screen has no `Scaffold` of its own (the search screen owns one), so a
+/// snackbar raised here would only be queued and show up on another screen.
+Future<void> exportAlbumToMusic(
+  BuildContext context,
+  WidgetRef ref,
+  Album album,
+) async {
+  final cache = ref.read(audioCacheManagerProvider);
+  if (await cache.isUsingPublicMusicFolder) {
+    if (!context.mounted) return;
+    await _showExportResult(
+      context,
+      'Nothing to export',
+      'The cache already lives in the system Music folder.',
+    );
+    return;
+  }
+  if (!context.mounted) return;
+
+  final report = await showDialog<MusicExportReport>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _MusicExportDialog(
+      exporter: MusicExporter(cache, storage: ref.read(androidStorageProvider)),
+      album: album,
+    ),
+  );
+  if (report == null || !context.mounted) return;
+  await _showExportResult(context, 'Export finished', report.summary);
+}
+
+Future<void> _showExportResult(
+  BuildContext context,
+  String title,
+  String message,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// A non-dismissible progress dialog that runs the export while it is up and
+/// closes itself with the [MusicExportReport].
+class _MusicExportDialog extends StatefulWidget {
+  const _MusicExportDialog({required this.exporter, required this.album});
+
+  final MusicExporter exporter;
+  final Album album;
+
+  @override
+  State<_MusicExportDialog> createState() => _MusicExportDialogState();
+}
+
+class _MusicExportDialogState extends State<_MusicExportDialog> {
+  int _done = 0;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_run());
+  }
+
+  Future<void> _run() async {
+    final report = await widget.exporter.exportAlbum(
+      widget.album,
+      onProgress: (done, total) {
+        if (!mounted) return;
+        setState(() {
+          _done = done;
+          _total = total;
+        });
+      },
+    );
+    if (mounted) Navigator.of(context).pop(report);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _total;
+    return AlertDialog(
+      title: const Text('Exporting to Music…'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(value: total == 0 ? null : _done / total),
+          const SizedBox(height: 12),
+          Text(
+            total == 0
+                ? 'Looking for cached tracks…'
+                : '$_done / $total tracks',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),

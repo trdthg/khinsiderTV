@@ -91,6 +91,8 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 水波纹手绘在内容**之上**的透明 `Material` 里 | Material 的 ink 画在它包裹的 child **下面**（`_RenderInkFeatures.paint`），直接套 `InkWell` 会被不透明的卡片/封面盖住。所以墨层是 `Stack` 的最后一个孩子并套 `IgnorePointer`（不能抢走方块内部控件的手势），ink feature 由 `_handleTapDown/Up/Cancel` 手动驱动；离开屏幕时在 `deactivate` 里 dispose（`dispose` 时机太晚，Material 已经先被卸载 → ticker 泄漏） |
 | TV 布局用**自绘键盘**，绝不碰系统 IME | Android TV 的系统键盘是**另一个窗口**，遥控器的「下」本该把焦点交给它，但这个按键会先被 Flutter 消费：`WidgetsApp` 的默认快捷键把方向键绑成 `DirectionalFocusIntent`（`app.dart:1281`）、`DefaultTextEditingShortcuts` 又绑成移动光标，两者都在应用内消化，按键到不了 Android 的窗口管理器 —— 于是「键盘弹出来但按不下去」是必然的；而「第二次进搜索页键盘不出来」同源：系统 IME 只在字段**获得焦点的瞬间**请求一次，字段一直有焦点就不会重现。所以 TV 上搜索框是 `readOnly`（不请求 IME、`autofocus: false`），输入交给 `TvKeyboard`（`lib/ui/search/tv_keyboard.dart`：`DpadTile` 网格，第一个键 autofocus，面板外层 `Focus.onKeyEvent` 让物理键盘照样能打字），Enter/Select 打开、Back(`PopScope`) 先收键盘、提交后自动收起。`isTelevision` 由 `dev.khinsider/platform` 提供，并在**第一帧之前**于 `main.dart` 解析后覆盖 `isTelevisionProvider`（否则 TV 上会先闪一次系统键盘）。手机/桌面完全不变 |
 
+| 「导出到 Music」走 MediaStore 贡献，不申请权限；结果用对话框而不是 SnackBar | Android 10+ 应用可以**免权限**往 `MediaStore.Audio` 插入自己的音频（`RELATIVE_PATH = Music/KHInsider/<专辑>` + `IS_PENDING=1`，写完置 0），Android 11+ 还能改/删自己的贡献；只有写普通文件才需要「所有文件访问」。所以导出是**复制**（播放/缓存路径一行不动），命中同名文件就跳过（按 `DISPLAY_NAME` 查再比路径，避开各版本 `RELATIVE_PATH` 尾斜杠差异），≤Android 9 报 `unsupported`（那时缓存本来就在公开目录）。结果用**对话框**报告：全仓库只有搜索页有 `Scaffold`，专辑页里 `showSnackBar` 在 debug 断言失败、release 只会排队等回到搜索页才弹 |
+
 ## 焦点与快捷键
 
 | 场景 | 按键 | 行为 |

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
+import '../audio/android_storage.dart';
 import '../audio/audio_cache_manager.dart';
 import 'player_controller.dart';
 
@@ -11,6 +12,12 @@ import 'player_controller.dart';
 final audioCacheManagerProvider = Provider<AudioCacheManager>((ref) {
   return AudioCacheManager();
 });
+
+/// The platform storage bridge: all-files access and the MediaStore export.
+/// Overridable so the export can be driven off-device in tests.
+final androidStorageProvider = Provider<AndroidStorage>(
+  (ref) => const MethodChannelAndroidStorage(),
+);
 
 /// Per-track cache state, as shown on the right edge of each track row.
 class TrackCacheEntry {

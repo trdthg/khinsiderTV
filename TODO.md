@@ -367,26 +367,53 @@
       * 手机/桌面完全不变（`isTelevision == false` 仍是原来的可编辑字段）。
       回归测试：`test/tv_search_test.dart` 6 条（进入即聚焦第一个键、增删清空、
       Search 提交、Hide/Escape 收起 + Enter 重开、物理键盘可打字、非 TV 不变）。
-- [ ] **I2 用 MediaStore 免权限写 `Music/`（替代「所有文件访问」）—— 待定方案**
+- [x] **I2 用 MediaStore 免权限导出到 `Music/`（用户选定方案 B：只加导出）**
+      用户选了「加一个导出到 Music 文件夹」：**缓存与播放路径一行不动**，新增导出动作把已缓存的
+      曲目**复制**一份进 `Music/KHInsider/<专辑>`。
+      * Kotlin：`dev.khinsider/storage` 新增 `exportToMusic`：Android 10+ 用 `MediaStore.Audio`
+        插入（`RELATIVE_PATH` 指向 `Music/KHInsider/<专辑>` + `IS_PENDING=1`，写完置 0），
+        **不需要任何权限**；同名文件先查一次（按 `DISPLAY_NAME` 查、再比对路径，
+        避开各版本 `RELATIVE_PATH` 尾斜杠不一致）→ 返回 `exists`，不重复复制；
+        ≤Android 9 返回 `unsupported`（那时缓存本来就在公开目录，不需要导出）。
+        顺带写入 `TITLE`/`ALBUM`/`IS_MUSIC`，别的播放器里能正常显示。
+      * Dart：`AndroidStorage.exportToMusic` + `MusicExportStatus`；新增
+        `MusicExporter`（`lib/audio/music_export.dart`）：每首取**最优的那份**
+        （有 flac 用 flac，否则 mp3）、跳过仍在下载（只有 `.part`）的曲目、逐首上报进度、
+        汇总 exported/alreadyThere/failed/unsupported；导出目录名沿用缓存目录名
+        （同名专辑被加过 id 后缀时两边保持一致）。新增 `androidStorageProvider` 便于测试注入。
+      * UI：手机在专辑头部（收藏按钮旁）有 `Export to Music` 按钮；宽屏在缓存行里有一个图标按钮
+        （TV 与桌面不出现，手机也不在缓存行重复）；导出中是**不可取消**的进度对话框，
+        结束用**对话框**报告结果与落点；缓存已经在公开目录时直接提示「无需导出」而不是造重复文件。
+      * 测试：`test/music_export_test.dart` 10 条（最优副本、优先 flac、跳过下载中、各状态计数、
+        进度、同名专辑目录、手机按钮导出、无缓存提示、TV/非 Android 不显示）。
+      * 已知副作用（用户已接受）：导出是复制，占双份空间；删缓存不会删 Music 里的副本。
+- [ ] **I3 专辑页没有 `Scaffold`，SnackBar 其实是「延迟到别的页面才弹」**
+      全仓库只有搜索页有 `Scaffold`，所以专辑页里的 `ScaffoldMessenger.showSnackBar`
+      在 debug 会断言失败（`_scaffolds.isNotEmpty`），release 只是入队、
+      等用户回到搜索页才弹出来。导出结果因此改用对话框（见 I2）。
+      受影响的老代码：「Copy cache folder path」按钮、首次启动的公开 Music 提示。
+      修法要先决定 `Scaffold` 放哪（app shell 包一层 / 每个页面自带），尚未处理。
+
+<details><summary>原始分析（方案比较，留档）</summary>
+
       事实核对：Android 10+ 应用**不需要任何权限**就能往 `MediaStore.Audio` 插入自己的音频
       （`RELATIVE_PATH = Music/KHInsider` + `IS_PENDING`），Android 11+ 还能改/删自己的贡献；
       读回自己插入的文件同样不需要权限（**重装后**那些文件算「别人的」，那时才需要
       `READ_MEDIA_AUDIO`（13+）/`READ_EXTERNAL_STORAGE`（≤12））。
-      但当前实现不是换个 API 就行：
+      但「把缓存本体搬进 MediaStore」不是换个 API 就行：
       * 下载是 just_audio 的 `LockCachingAudioSource` 干的，它要一个**文件路径**做
         `cacheFile`（`just_audio_player_impl.dart` 的 `_sourceFor`），MediaStore 只给
         `content://`，没有路径；
       * `AudioCacheManager` 整层是路径式 API（`root()` 返回 `Directory`、
         `fileFor/fileForSync/categoryDirSync`、`totalSize` 遍历、专辑清单与封面写文件），
-        要换成 URI 得重写这一层和所有调用点；
-      * 播放侧可行：just_audio 用 ExoPlayer 的 `DefaultDataSource`（`AudioPlayer.java:749`），
-        支持 `content://` —— 但没有设备可验证 seek / 缓存交互 / 重名改名 / 重装归属。
-      可选方案（按工作量与风险）：
-      * **A. 导出**：缓存仍在私有目录，用户对一个专辑点「导出到 Music」时写进 MediaStore
-        （复制 → 双份空间；或播放结束后移动 → 单份但要处理「正在播的文件被搬走」）；
-        播放路径零改动，风险最低。
-      * **B. 重写缓存层**：自己下载直接落 MediaStore，播放改用 `content://`，
-        缓存徽标/清单/FLAC/迁移全跟着改；最"正确"、单份空间，但没有设备可验证，风险最高。
-      * **C. 保持现状**（「所有文件访问」+ 路径式缓存）：能用、零风险，但要用户在系统设置里
-        开一个比较吓人的开关。
-      待用户选 A / B / C 后再实现。
+        换成 URI 要重写这一层和所有调用点；
+      * 播放侧可行：just_audio 用 ExoPlayer 的 `DefaultDataSource`（`AudioPlayer.java:749`）
+        支持 `content://`，但没有设备可验证 seek / 缓存交互 / 重名改名 / 重装归属。
+      当时的三个选项：
+      * **A. 把 MediaStore 当仓库**：下载仍在私有目录暂存，下完「搬」进 `Music/`，重播走
+        `content://`；单份空间，但要重做 `_sourceFor` 与缓存扫描，且只能在用户设备上验证。
+        → 未选。
+      * **B. 只加导出（用户选了这个）**：播放/缓存零改动，导出时复制一份进 MediaStore。
+        占双份空间，但风险最低、可以立刻用上。
+      * **C. 维持现状**（继续用「所有文件访问」）：零风险，但要用户在系统设置里开那个开关。
+</details>

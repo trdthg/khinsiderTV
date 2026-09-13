@@ -356,6 +356,22 @@ class FakeAndroidStorage implements AndroidStorage {
   /// How often the settings screen was requested.
   int requests = 0;
 
+  /// What [exportToMusic] should answer with.
+  MusicExportStatus exportStatus = MusicExportStatus.exported;
+
+  /// Every export request, in order.
+  final List<
+    ({
+      String relativePath,
+      String displayName,
+      String sourcePath,
+      String? mimeType,
+      String? title,
+      String? album,
+    })
+  >
+  exports = [];
+
   @override
   Future<bool> canWritePublicMusic() async => granted;
 
@@ -364,4 +380,25 @@ class FakeAndroidStorage implements AndroidStorage {
 
   @override
   Future<void> requestAllFilesAccess() async => requests++;
+
+  @override
+  Future<MusicExportStatus> exportToMusic({
+    required String relativePath,
+    required String displayName,
+    required String sourcePath,
+    String? mimeType,
+    String? title,
+    String? artist,
+    String? album,
+  }) async {
+    exports.add((
+      relativePath: relativePath,
+      displayName: displayName,
+      sourcePath: sourcePath,
+      mimeType: mimeType,
+      title: title,
+      album: album,
+    ));
+    return exportStatus;
+  }
 }
