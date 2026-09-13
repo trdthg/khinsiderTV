@@ -1,9 +1,40 @@
 # Khinsider
 
-KHInsider game-soundtrack client — Flutter + pure-Dart data package,
-designed around a strict three-layer Clean Architecture.
+A simple client for the [khinsider](https://downloads.khinsider.com) website.
 
-详细分层、数据流、焦点系统与状态一览见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+English · [中文](README.zh-CN.md)
+
+Download the latest `v*` release from [Releases](https://github.com/trdthg/khinsiderTV/releases):
+Android (armv7 / arm64 / universal APK), macOS, Windows, Linux / Steam Deck (flatpak).
+
+## Status
+
+I have tested it on Android / macOS / Windows / Chromecast and it runs on all of them.
+
+## Why Flutter
+
+My original goal was to write it for my Chromecast and my Steam Deck. The Steam Deck would have been fine either way, but the Chromecast is the awkward one: it uses the armv7a architecture, i.e. it is a 32-bit device.
+Then I also wanted to provide clients for my Android / macOS / Windows / iOS devices, so in the end I went with a cross-platform approach.
+
+I considered wiliwili's approach. Its Steam Deck experience is excellent, but after looking into the framework it uses, supporting Android devices with it looked rather painful, and I am not particularly keen on supporting the Switch either, since I don't own one yet.
+
+I also considered VacuumTube's approach: wrapping the original web page in Electron. But a few days ago I heard that the latest Electron has dropped the armv7a architecture, and Electron is far too heavyweight anyway — for the Chromecast experience it is better not to use it for now. That said, wrapping a web page is genuinely one of my favourite approaches:
+the original experience, plus a bit of JavaScript to provide controller support — excellent. I originally wanted my AI to do it that way, but it didn't seem to grasp what I meant. That's fine though: this is only a small piece of software. But if I have the time, or if there is a need — logging in, for example — I will reconsider that approach.
+
+React Native? I don't know. I used to be a devoted React user, especially of the JSX/TSX syntax, but I'm tired of `useEffect`. The Hermes engine performs well and would give me hot updates, but I don't think it's necessary — this is only a small piece of software, after all.
+
+Kotlin/Swift? I have tried both, and the code is genuinely fun, but I am not very familiar with their cross-platform situation, so I didn't consider them for now. Also, I don't really like the heavy nesting in Dart... but never mind, let's leave it at that. This software is written by AI and I don't read much of the code either, though I will try to keep it simple and maintainable.
+
+SDL? Not for now...
+
+Anyway, my role model is LocalSend: it is very simple and beautiful, and I hope this software can be like that too.
+
+## Architecture
+
+The software contains two parts: a GUI, and the khinsider API, which fetches its data by parsing HTML. There are basically just two things in it — search, and fetching album information — so I think it could even support multiple data sources.
+
+The client is a Flutter app plus a pure-Dart data package, designed around a strict three-layer Clean Architecture.
+The full layer, data-flow, focus-system and state overview is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 khinsider/
@@ -19,14 +50,15 @@ khinsider/
                                 #   (compact notification actions, see ARCHITECTURE.md)
 ```
 
-## Architecture
-
 **UI layer** — Flutter. Responsive grid/list layouts; D-Pad & gamepad focus
 system (`DpadTile`, `FocusTraversalGroup`); app-wide media-key shortcuts
 (`MediaPlayPause`, `MediaTrackNext`, …) via `CallbackShortcuts`. Narrow
 (phone) layouts put the search bar at the **bottom** with the results stacked
 bottom-up, and show the album header (cover · title · favorite · details)
-above the track list.
+above the track list. On Android TV the search field never opens the system
+IME: the app draws its own D-Pad keyboard instead
+(`ui/search/tv_keyboard.dart`), because Flutter consumes the arrow keys that
+would otherwise move focus into the system keyboard window.
 
 **State layer** — `flutter_riverpod`. `PlayerController` bridges the UI to the
 abstract `BaseAudioPlayer` and implements **two-phase lazy loading**:
@@ -44,12 +76,25 @@ lock-screen controls. The app never depends on audio_service directly — only
 deliberately stays in the foreground while paused
 (`androidStopForegroundOnPause: false`), because Android 12+ refuses to restart
 a foreground service from the background — which is what used to make the
-notification's play/pause/next buttons unresponsive.
+notification's play/pause/next buttons unresponsive. The notification icons are
+declared by name inside the app module (`android/app/src/main/res/drawable`),
+because R8/resource shrinking otherwise strips drawables that are only
+referenced by name at runtime.
 
 **Local storage** — `storage/json_kv_store.dart`, a dependency-free JSON-file
 KV store (Application Support dir, atomic writes, debounced flush). Powers:
 persistent favorites, search history (chips on the home screen) and recently
 viewed albums. Swappable for Isar/Hive later without touching providers.
+
+**Downloads & the system music library** — every downloaded track goes through
+`LockCachingAudioSource`, so playback streams while the file is written and
+later plays from disk. On Android the cache lives in the app's private
+directory by default; the user can move it into `Music/KHInsider/<Album>`
+(needs "all files access" on Android 11+), and phone layouts additionally
+offer **Export to Music**, which contributes the cached files to `MediaStore`
+with `RELATIVE_PATH` + `IS_PENDING` — that route needs no permission at all on
+Android 10+. Export copies, never moves, and skips tracks that are already
+in the Music folder.
 
 **Data layer** — `packages/khinsider_api`, pure Dart (`dio` + `html`), zero
 Flutter/native dependencies:
@@ -71,18 +116,19 @@ draws is the 200×200 file (~15–80 KB) — see `AlbumSummary.imageUrl` /
   variant (`/game-soundtrack/album/…`) is blocked by Cloudflare WAF (403).
 * Requests must send a browser-like `User-Agent` and `Accept` headers.
 
-## 发版（release 脚本）
+## Releasing
 
 ```bash
-./scripts/release.sh patch          # 0.1.3 -> 0.1.4：改 pubspec、commit、打 tag、推送（触发 CI 发版）
+./scripts/release.sh patch          # 0.1.3 -> 0.1.4: bump pubspec, commit, tag, push (CI publishes)
 ./scripts/release.sh minor          # 0.1.3 -> 0.2.0
 ./scripts/release.sh major          # 0.1.3 -> 1.0.0
-./scripts/release.sh repin          # 把最新 tag 重新指到当前 commit 并重建 GitHub Release（CI 失败修复后用）
-./scripts/release.sh repin v0.1.3   # 重指指定 tag
+./scripts/release.sh repin          # move the newest tag onto the current commit and rebuild the GitHub Release (after fixing a CI failure)
+./scripts/release.sh repin v0.1.3   # re-pin a specific tag
 ./scripts/release.sh patch --dry-run
 ```
 
-`repin` 会先删除该 tag 对应的 GitHub Release（旧产物一并清掉），CI 重跑后自动重建。
+`repin` deletes the GitHub Release for that tag first (removing the old
+artifacts); the CI re-run recreates it.
 
 ### Android release signing
 
