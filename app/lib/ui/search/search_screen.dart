@@ -52,9 +52,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.dispose();
   }
 
-  void _setKeyboardOpen(bool open) {
+  void _setKeyboardOpen(bool open, {bool focusField = false}) {
     if (_keyboardOpen == open) return;
     setState(() => _keyboardOpen = open);
+    // Closing the keyboard disposes the focused key, so focus has to be put
+    // somewhere deliberate — otherwise the remote is dead until the user finds
+    // the field again by hand. The field is the right place: it is read-only on
+    // a TV, and Flutter only creates an input connection for it when it is
+    // editable (`EditableText._shouldCreateInputConnection`), so this cannot
+    // bring the system IME back.
+    if (!open && focusField && _tv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
   }
 
   void _append(String character) {
@@ -165,27 +176,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       // On a TV, Back means "hide the keyboard" before it means "leave search".
       canPop: !(_tv && _keyboardOpen),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _setKeyboardOpen(false);
+        if (!didPop) _setKeyboardOpen(false, focusField: true);
       },
       child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (!narrow) searchBar,
-              Expanded(child: _buildBody(context, state, reverse: narrow)),
-              if (narrow) searchBar,
-              if (_tv && _keyboardOpen)
-                TvKeyboard(
-                  onKey: _append,
-                  onBackspace: _backspace,
-                  onClear: () => _controller.clear(),
-                  onSubmit: _submit,
-                  onClose: () => _setKeyboardOpen(false),
-                ),
-            ],
-          ),
-        ),
+        body: SafeArea(child: _buildStack(narrow, state, searchBar)),
       ),
+    );
+  }
+
+  Widget _buildStack(bool narrow, SearchState state, Widget searchBar) {
+    return Column(
+      children: [
+        if (!narrow) searchBar,
+        Expanded(child: _buildBody(context, state, reverse: narrow)),
+        if (narrow) searchBar,
+        if (_tv && _keyboardOpen)
+          TvKeyboard(
+            onKey: _append,
+            onBackspace: _backspace,
+            onClear: () => _controller.clear(),
+            onSubmit: _submit,
+            onClose: () => _setKeyboardOpen(false, focusField: true),
+          ),
+      ],
     );
   }
 

@@ -25,12 +25,13 @@ void main() {
   Future<RecordingSearchController> pump(
     WidgetTester tester, {
     required bool tv,
+    double devicePixelRatio = 1.0,
   }) async {
     // A TV window (Google TV is 1920x1080) and a phone one.
     tester.view.physicalSize = tv
         ? const Size(1920, 1080)
         : const Size(400, 900);
-    tester.view.devicePixelRatio = 1.0;
+    tester.view.devicePixelRatio = devicePixelRatio;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -130,22 +131,66 @@ void main() {
     );
   });
 
-  testWidgets('Hide (Escape) closes the keyboard and Enter brings it back', (
+  testWidgets('Escape closes the keyboard and Enter brings it back', (
+    tester,
+  ) async {
+    await pump(tester, tv: true);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.byType(TvKeyboard), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(TvKeyboard), findsOneWidget);
+  });
+
+  testWidgets('the remote can reach every key, including the row right half', (
+    tester,
+  ) async {
+    // Google TV reports 1920x1080 at density 2: 960x540 logical pixels, which is
+    // much narrower than the default test window and is what the user is on.
+    await pump(tester, tv: true, devicePixelRatio: 2.0);
+
+    // Digits row: 1 -> 5, then down into the letter row under it (t).
+    for (var i = 0; i < 4; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    // ... and on to y, which the user cannot reach on a Chromecast.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'y',
+      reason: 'right of t must be reachable with the remote',
+    );
+  });
+
+  testWidgets('hiding the keyboard hands focus back to the search field', (
     tester,
   ) async {
     await pump(tester, tv: true);
 
     await tester.tap(find.widgetWithText(DpadTile, 'Hide'));
     await tester.pump();
-    expect(find.byType(TvKeyboard), findsNothing);
 
-    // Focus is on the read-only field now, so Enter reopens the keyboard
-    // instead of doing nothing.
-    await tester.tap(find.byType(TextField));
-    await tester.pump();
+    // No tap on the field first: Enter alone must bring the keyboard back.
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(find.byType(TvKeyboard), findsOneWidget);
+    // The first key is focused again, so typing works right away.
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '1',
+    );
   });
 
   testWidgets('a physical keyboard still types on a TV', (tester) async {

@@ -434,3 +434,36 @@
         占双份空间，但风险最低、可以立刻用上。
       * **C. 维持现状**（继续用「所有文件访问」）：零风险，但要用户在系统设置里开那个开关。
 </details>
+
+## J. Google TV 键盘走位（用户反馈第八轮）
+
+- [x] **J1 Chromecast 上「一部分字母选不到」：`t` 右边的键完全走不过去**
+      用户描述：`t` 右侧的字母选不到。根因是**方向键交给了 Flutter 的
+      `DirectionalFocusTraversalPolicy`**，而它是按几何算的：在真实 TV 窗口
+      （1920×1080 @ density 2 = **960×540 逻辑像素**）下，同一行内从 `t` 往右会失败，
+      `y u i o p` 走不到。之前的测试用的是默认 800×600 窗口（更宽），所以没复现出来。
+      修法：`TvKeyboard` 改成 `StatefulWidget`，**自己持有每个键的 `FocusNode`**
+      （`debugLabel: tv-key-*`、`skipTraversal: true`），把四个方向键交给自己的
+      `Focus.onKeyEvent`：行内左右 clamp、跨行保留列号并对该行长度 clamp。
+      不再依赖屏幕尺寸，也不会跑到键盘外面去。
+      回归测试：`test/tv_search_test.dart` 里新增一条，用**真实 TV 的物理分辨率 +
+      dpr 2**（`physicalSize: 1920x1080, devicePixelRatio: 2`）复现：数字行右移 4 格 →
+      下到 `t` → 再右移 1 格 → Select，期望得到 `y`。
+- [x] **J2 收起键盘后焦点丢了：再按 Enter 回不到输入**
+      用户描述：退出输入再重新进入输入「找不到东西」。原因有两个：
+      (1) 收起键盘时被聚焦的键节点被 dispose，焦点掉到未知位置（旧测试里甚至写了
+      「先点一下输入框再按 Enter」的错误假设，等于把 bug 写进了测试）；
+      (2) 重开键盘时第一个键靠 `autofocus`，而 `autofocus` 只对**新建**节点生效，
+      重开时焦点已经被字段/别处占着，不会触发。
+      修法：`_setKeyboardOpen(false, focusField: true)`（Hide / Back 走这条）在 post-frame 里
+      把焦点显式还给**搜索框**：字段本身已经处理 Enter/Select 重开键盘、可打印字符、
+      退格，所以「隐藏 → 按 Enter 继续输入」直接成立。这里能放心把焦点给字段，是因为
+      Android 上 `readOnly` 的 `EditableText` 根本不会创建 input connection
+      （`_shouldCreateInputConnection => kIsWeb || macOS || !readOnly`，Android 走最后一项），
+      所以不会把系统 IME 勾出来。提交（Search）那条**不**抢焦点，仍然让结果列表的
+      autofocus 把焦点带到第一张专辑上。`TvKeyboard` 则在 `initState` 的 post-frame 里
+      显式 `requestFocus()` 第一个键，不再依赖 `autofocus`（它只对新建节点生效）。
+      回归测试：Hide 之后**不点输入框**直接按 Enter，键盘必须回来并且第一个键已聚焦
+      （再按 Select 得到 `1`）。
+- 教训：TV 相关的 UI 测试要用真实 TV 的**逻辑分辨率**跑，默认 800×600 会把这类
+  几何相关的走位问题盖过去。
