@@ -339,6 +339,9 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                 onTrackActivated: widget.onTrackActivated,
                 showRelated: false,
                 isZen: true,
+                // The phone layout has no player UI of its own (the OSD menu is
+                // zen-only), so the now-playing row doubles as a seek bar.
+                enableScrub: true,
                 // The album info lives ABOVE the track list, inside the same
                 // scrollable — the phone layout must not lose the cover /
                 // favorite button the way the bare title bar used to.

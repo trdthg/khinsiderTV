@@ -240,6 +240,60 @@ void main() {
       },
     );
 
+    test(
+      'a seek publishes at once while ordinary ticks stay throttled',
+      () async {
+        final inner = RecordingPlayer();
+        final handler = KhinsiderAudioHandler(player: inner);
+        addTearDown(handler.dispose);
+        inner.queue.add(_item);
+
+        inner.snapshots.add(
+          const AudioPlayerSnapshot(playing: true, currentIndex: 0),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        // Ticks are throttled (the system extrapolates the position itself, so
+        // republishing every 200 ms would only spam the platform channel)…
+        final start = handler.playbackState.value.updatePosition;
+        inner.positions.add(start + const Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration.zero);
+        expect(handler.playbackState.value.updatePosition, start);
+
+        // …but a jump is a seek, and the system's own progress bar must not lag
+        // a second behind the finger that produced it.
+        const target = Duration(seconds: 42);
+        inner.positions.add(target);
+        await Future<void>.delayed(Duration.zero);
+        expect(handler.playbackState.value.updatePosition, target);
+      },
+    );
+
+    test(
+      'seek() publishes the target before the player reports back',
+      () async {
+        // The notification's scrub bar reads `updatePosition`; publishing only
+        // after the transport answers makes the bar snap back to the old
+        // position in the meantime.
+        final inner = RecordingPlayer();
+        final handler = KhinsiderAudioHandler(player: inner);
+        addTearDown(handler.dispose);
+        inner.queue.add(_item);
+
+        inner.snapshots.add(
+          const AudioPlayerSnapshot(playing: true, currentIndex: 0),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        await handler.seek(const Duration(seconds: 42));
+        expect(inner.calls, contains('seek'));
+        expect(
+          handler.playbackState.value.updatePosition,
+          const Duration(seconds: 42),
+        );
+      },
+    );
+
     test('never advertises buffering while the track is playing', () async {
       // Android derives the play/pause icon from `state == STATE_PLAYING`
       // alone (SystemUI MediaControlPanel.isPlaying). Reporting a buffering

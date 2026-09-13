@@ -38,8 +38,14 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
       )
       ..add(
         player.positionStream.listen((p) {
+          // A seek (the phone scrubber, the OSD bar, or the system's own) moves
+          // the position in one jump. The throttle below exists to keep 60 Hz
+          // ticks off the platform channel, but it would also leave the
+          // system's progress bar a second behind the finger — so a jump
+          // publishes immediately.
+          final jumped = (p - _lastPosition).abs() > const Duration(seconds: 2);
           _lastPosition = p;
-          _publishPlayback();
+          _publishPlayback(force: jumped);
         }),
       );
   }
@@ -171,7 +177,14 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
   }
 
   @override
-  Future<void> seek(Duration position) => player.seek(position);
+  Future<void> seek(Duration position) async {
+    // Publish the target before the player reports back: `_lastPosition` is
+    // what `updatePosition` carries, and the system's scrub bar must not snap
+    // back to the old position while the player catches up with the request.
+    _lastPosition = position;
+    _publishPlayback(force: true);
+    await player.seek(position);
+  }
 
   // -- state sync ------------------------------------------------------------
 

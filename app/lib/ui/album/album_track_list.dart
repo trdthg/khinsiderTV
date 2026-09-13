@@ -24,6 +24,7 @@ class AlbumTrackList extends ConsumerWidget {
     this.onLeftArrow,
     this.zenT,
     this.isZen = false,
+    this.enableScrub = false,
     this.header,
   });
 
@@ -45,6 +46,13 @@ class AlbumTrackList extends ConsumerWidget {
   /// Whether the morph is currently in its zen/playback layout.
   final bool isZen;
 
+  /// Turns the now-playing row into a seek bar (drag left/right, release to
+  /// jump). Only the narrow phone layout asks for it: the phone has no player
+  /// UI of its own (the OSD menu below is zen-only), so its progress fill is
+  /// the only progress readout there is. Wide TV/desktop layouts keep the OSD
+  /// menu's seek control and are deliberately left alone.
+  final bool enableScrub;
+
   /// Optional content rendered as the FIRST child of the same scrollable —
   /// used by the narrow (phone) album layout to keep the album info above the
   /// tracks without nesting a second scroll view inside this one.
@@ -54,7 +62,6 @@ class AlbumTrackList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final player = ref.watch(playerControllerProvider);
     final cache = ref.watch(albumCacheProvider);
-    final scheme = Theme.of(context).colorScheme;
 
     // The tail stays mounted while it flies away, and disappears for good
     // once the morph is over (zenT == 1).
@@ -143,63 +150,56 @@ class AlbumTrackList extends ConsumerWidget {
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Stack(
-                    children: [
-                      if (isCurrent)
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: scheme.primary.withValues(alpha: 0.10),
-                          ),
-                        ),
-                      if (isCurrent && progress > 0)
-                        Positioned.fill(
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: progress,
-                            child: ColoredBox(
-                              color: scheme.primary.withValues(alpha: 0.22),
-                            ),
-                          ),
-                        ),
-                      ListTile(
-                        leading: SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: Center(
-                            child: isLoading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                    ),
-                                  )
-                                : isPlaying || isPaused
-                                ? Icon(
-                                    isPlaying
-                                        ? Icons.pause_circle
-                                        : Icons.play_circle,
-                                    size: 30,
-                                  )
-                                : Text(
-                                    '${track.index}.',
-                                    textAlign: TextAlign.center,
+                  child: _ScrubLayer(
+                    // Only the now-playing row of the phone layout is a seek
+                    // bar; every other row (and both wide layouts) is exactly
+                    // what it was before.
+                    enabled: enableScrub && isCurrent,
+                    highlight: isCurrent,
+                    progress: progress,
+                    position: player.position,
+                    duration: player.duration,
+                    onSeek: (target) => ref
+                        .read(playerControllerProvider.notifier)
+                        .seek(target),
+                    child: ListTile(
+                      leading: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Center(
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
                                   ),
-                          ),
+                                )
+                              : isPlaying || isPaused
+                              ? Icon(
+                                  isPlaying
+                                      ? Icons.pause_circle
+                                      : Icons.play_circle,
+                                  size: 30,
+                                )
+                              : Text(
+                                  '${track.index}.',
+                                  textAlign: TextAlign.center,
+                                ),
                         ),
-                        title: Text(
-                          track.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: track.duration != null
-                            ? Text(track.duration!)
-                            : null,
-                        // Right-aligned cache badge: is this track already on
-                        // disk, still downloading, or network-only?
-                        trailing: _CacheBadge(entry: cache.tracks[track.index]),
                       ),
-                    ],
+                      title: Text(
+                        track.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: track.duration != null
+                          ? Text(track.duration!)
+                          : null,
+                      // Right-aligned cache badge: is this track already on
+                      // disk, still downloading, or network-only?
+                      trailing: _CacheBadge(entry: cache.tracks[track.index]),
+                    ),
                   ),
                 ),
               ),
@@ -209,6 +209,182 @@ class AlbumTrackList extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The playback-progress background of a row — and, on the phone layout, the
+/// seek bar the now-playing row doubles as.
+///
+/// Dragging horizontally moves the fill under the finger and shows a readout
+/// pill with where the jump would land; the seek itself is committed **once**,
+/// on release. That split is not just about feel: seeking here is not free.
+/// The audio is played through `LockCachingAudioSource`, whose local proxy
+/// answers a range request from the downloaded prefix instantly but has to
+/// wait for the sequential download to reach a position that is not on disk
+/// yet — so seeking on every drag update would stall the player behind the
+/// finger instead of following it.
+///
+/// A touch that never moves is not a drag: the gesture arena gives it to
+/// [DpadTile]'s tap recognizer, so tapping the now-playing row still means
+/// play/pause. Nothing is attached at all when [enabled] is false, which is
+/// every row but the current one and every layout but the phone's.
+class _ScrubLayer extends StatefulWidget {
+  const _ScrubLayer({
+    required this.enabled,
+    required this.highlight,
+    required this.progress,
+    required this.position,
+    required this.duration,
+    required this.onSeek,
+    required this.child,
+  });
+
+  /// Whether this row accepts the scrub gesture (phone layout + current row).
+  final bool enabled;
+
+  /// Whether the row is the now-playing one (it keeps its tint either way).
+  final bool highlight;
+
+  /// Playback progress, 0..1, from the player.
+  final double progress;
+
+  /// Playback position, shown in the readout before the first drag update.
+  final Duration position;
+
+  /// Total length; without it there is nothing to seek within.
+  final Duration? duration;
+
+  final ValueChanged<Duration> onSeek;
+  final Widget child;
+
+  @override
+  State<_ScrubLayer> createState() => _ScrubLayerState();
+}
+
+class _ScrubLayerState extends State<_ScrubLayer> {
+  /// Where the finger is, as a 0..1 fraction; null when not scrubbing.
+  double? _scrub;
+
+  /// Milliseconds the row spans, or null while the duration is unknown.
+  double? get _maxMs {
+    final ms = widget.duration?.inMilliseconds ?? 0;
+    return ms > 0 ? ms.toDouble() : null;
+  }
+
+  bool get _canScrub => widget.enabled && _maxMs != null;
+
+  /// Maps a pointer position inside the row to a 0..1 fraction of its width.
+  double? _fractionAt(Offset local) {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || box.size.width <= 0) return null;
+    return (local.dx / box.size.width).clamp(0.0, 1.0);
+  }
+
+  void _onDragStart(DragStartDetails details) {
+    final fraction = _fractionAt(details.localPosition);
+    if (fraction == null) return;
+    HapticFeedback.selectionClick();
+    setState(() => _scrub = fraction);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_scrub == null) return; // started outside the row: ignore the drag
+    final fraction = _fractionAt(details.localPosition);
+    if (fraction == null) return;
+    setState(() => _scrub = fraction);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final fraction = _scrub;
+    final maxMs = _maxMs;
+    if (_scrub != null) setState(() => _scrub = null);
+    if (fraction == null || maxMs == null) return;
+    widget.onSeek(Duration(milliseconds: (maxMs * fraction).round()));
+  }
+
+  void _onDragCancel() {
+    if (_scrub != null) setState(() => _scrub = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final scrub = _scrub;
+    final maxMs = _maxMs;
+    // While dragging, the fill follows the finger instead of the player.
+    final fill = (scrub ?? widget.progress).clamp(0.0, 1.0);
+    final target = scrub == null || maxMs == null
+        ? null
+        : Duration(milliseconds: (maxMs * scrub).round());
+
+    final content = Stack(
+      children: [
+        if (widget.highlight)
+          Positioned.fill(
+            child: ColoredBox(color: scheme.primary.withValues(alpha: 0.10)),
+          ),
+        if (fill > 0)
+          Positioned.fill(
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: fill,
+              child: ColoredBox(
+                color: scheme.primary.withValues(
+                  alpha: scrub == null ? 0.22 : 0.30,
+                ),
+              ),
+            ),
+          ),
+        widget.child,
+        if (target != null)
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 8,
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surface.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  child: Text(
+                    '${_formatTime(target)} / ${_formatTime(widget.duration!)}',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (!_canScrub) return content;
+    return GestureDetector(
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      onHorizontalDragCancel: _onDragCancel,
+      child: content,
+    );
+  }
+}
+
+/// `m:ss`, or `h:mm:ss` past the hour (game OSTs have long tracks).
+String _formatTime(Duration d) {
+  final seconds = d.inSeconds < 0 ? 0 : d.inSeconds;
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  final s = seconds % 60;
+  final ss = s.toString().padLeft(2, '0');
+  if (h == 0) return '$m:$ss';
+  return '$h:${m.toString().padLeft(2, '0')}:$ss';
 }
 
 /// Right-aligned per-track cache indicator.

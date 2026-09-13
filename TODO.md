@@ -314,3 +314,30 @@
         `audioCacheManagerProvider`（原来播放器和 UI 各有一个实例，`forgetRoot()` 只会影响一半）。
       回归测试：`audio_cache_manager_test.dart`「Android public Music folder」一组 4 条
       （授权后用 Music、未授权用私有目录、`forgetRoot()` 后重新解析、pin 住的 root 不被清掉）。
+
+## H. 播放进度跳转（用户反馈第六轮）
+
+- [x] **H1 手机：当前播放行变成可拖动进度条**
+      手机窄屏布局此前**没有任何播放器 UI**（OSD 菜单只在 `width > 700` 的 zen 布局里出现），
+      唯一能看进度的地方就是当前播放行的背景填充（`album_track_list.dart` 里的
+      `FractionallySizedBox`），而它不可交互 —— 想去某个位置只能靠通知栏。
+      做法：新增 `_ScrubLayer`（同一文件），只有「手机布局 + 当前行 + 时长已知」才挂手势：
+      * 横向拖动时填充跟着手指走，右侧浮出 `1:23 / 3:45` 读数（拖动期间用本地 scrub 值渲染，
+        不依赖 player 的 tick）；
+      * **松手才提交一次 seek** —— 音频走 `LockCachingAudioSource`，它的本地代理对已下载区间
+        直接读缓存文件（瞬时），对还没下到的位置要等顺序下载追上来；每次 update 都 seek 会让
+        播放器卡在手指后面。这也是没做成 Material `Slider` 那种连续 seek 的原因；
+      * 没移动的触摸不会被这个手势拿走（手势竞技场判给 `DpadTile` 的 tap），所以轻点仍然是
+        播放/暂停；拖动时给一次 `HapticFeedback.selectionClick()`；
+      * 其它行、以及宽屏 TV/桌面布局完全不挂手势（`seek_scrub_test.dart` 用「宽屏拖动不 seek」
+        把这条约束 pin 住）；宽屏继续用 OSD 的 `SeekBar`（点击 + ←/→ ±10s）。
+      `AlbumTrackList` 新增 `enableScrub`（默认 false），只有 `album_screen.dart` 的
+      `_buildMobile` 传 true。
+- [x] **H2 seek 之后系统进度条立刻跟手**
+      `KhinsiderAudioHandler` 的位置发布本来有 1s 节流（防止播放中 60Hz 的 tick 刷爆 platform
+      channel），于是跳转后通知栏/锁屏的进度条会慢半拍。现在：
+      * 位置单次变化 > 2s 视为 seek，立即（force）发布；普通 tick 仍被节流；
+      * `seek()` 先把目标写进 `_lastPosition` 并发布，再 `await` 播放器 —— 否则系统滑块会在
+        播放器反应过来之前弹回旧位置。
+      回归测试：`media_session_test.dart` 新增两条（跳转立即发布 / 普通 tick 仍被节流；
+      seek 先发布目标）。
