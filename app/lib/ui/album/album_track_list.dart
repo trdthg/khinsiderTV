@@ -157,7 +157,6 @@ class AlbumTrackList extends ConsumerWidget {
                     enabled: enableScrub && isCurrent,
                     highlight: isCurrent,
                     progress: progress,
-                    position: player.position,
                     duration: player.duration,
                     onSeek: (target) => ref
                         .read(playerControllerProvider.notifier)
@@ -232,7 +231,6 @@ class _ScrubLayer extends StatefulWidget {
     required this.enabled,
     required this.highlight,
     required this.progress,
-    required this.position,
     required this.duration,
     required this.onSeek,
     required this.child,
@@ -246,9 +244,6 @@ class _ScrubLayer extends StatefulWidget {
 
   /// Playback progress, 0..1, from the player.
   final double progress;
-
-  /// Playback position, shown in the readout before the first drag update.
-  final Duration position;
 
   /// Total length; without it there is nothing to seek within.
   final Duration? duration;
