@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -110,9 +111,31 @@ class MainActivity : AudioServiceActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isTelevision" -> result.success(isTelevision())
+                    "setKeepScreenOn" -> {
+                        setKeepScreenOn(call.arguments as? Boolean ?: false)
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * Holds the screen on while audio plays (`FLAG_KEEP_SCREEN_ON`).
+     *
+     * A TV that lets its screen time out goes into ambient mode and then
+     * standby, and standby stops playback: on a Chromecast the music dies on
+     * its own after a while, which is what this prevents. The flag is tied to
+     * the window, so it stops applying by itself once the app is not visible -
+     * a paused player therefore still lets the device sleep.
+     *
+     * MethodChannel handlers already run on the main thread, so no hopping.
+     */
+    private fun setKeepScreenOn(on: Boolean) {
+        if (on)
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     /**

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'core/keyboard/global_media_keys.dart';
+import 'core/widgets/keep_screen_awake.dart';
 import 'core/theme.dart';
 import 'ui/shared/public_music.dart';
 import 'ui/shared/update_banner.dart';
@@ -37,15 +38,17 @@ class KhinsiderApp extends ConsumerWidget {
         }
         return MaterialPageRoute<void>(builder: (_) => const SearchScreen());
       },
-      builder: (context, child) => GlobalMediaKeys(
-        navigatorKey: khinsiderNavigatorKey,
-        child: Column(
-          children: [
-            const UpdateBanner(),
-            // Android only, asked once: offer the public Music folder.
-            PublicMusicPrompt(navigatorKey: khinsiderNavigatorKey),
-            Expanded(child: child ?? const SizedBox.shrink()),
-          ],
+      builder: (context, child) => KeepScreenAwake(
+        child: GlobalMediaKeys(
+          navigatorKey: khinsiderNavigatorKey,
+          child: Column(
+            children: [
+              const UpdateBanner(),
+              // Android only, asked once: offer the public Music folder.
+              PublicMusicPrompt(navigatorKey: khinsiderNavigatorKey),
+              Expanded(child: child ?? const SizedBox.shrink()),
+            ],
+          ),
         ),
       ),
     );

@@ -25,3 +25,24 @@ Future<bool> resolveIsTelevision() async {
     return false;
   }
 }
+
+/// Keeps the screen — and therefore the device — awake while audio plays.
+///
+/// Android TV / Google TV drop into ambient mode and then standby once the
+/// screen has been idle for the system timeout, which also takes the audio
+/// with it: a Chromecast stops playing after a while unless something holds
+/// the screen on. `FLAG_KEEP_SCREEN_ON` is the supported way to do that, and it
+/// only applies while the app is actually visible, so nothing has to be undone
+/// when it goes to the background.
+///
+/// Never throws: on platforms without the handler (macOS, Windows, Linux, iOS)
+/// the call simply lands nowhere.
+Future<void> setScreenAwake(bool awake) async {
+  try {
+    await _channel.invokeMethod<void>('setKeepScreenOn', awake);
+  } on PlatformException {
+    // Nothing to do: worst case the screen sleeps as it did before.
+  } on MissingPluginException {
+    // Desktop / iOS: no such handler.
+  }
+}

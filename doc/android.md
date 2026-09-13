@@ -87,6 +87,11 @@ Manifest 里同时注册了 `LAUNCHER` 和 `LEANBACK_LAUNCHER`，并声明：
 所以手机和电视（盒子）的启动器里都能看到，遥控器的方向键/确定键由应用自己的焦点系统处理
 （详见 `ARCHITECTURE.md` 和 `TODO.md` 的 K 节）。
 
+播放期间应用会通过 `dev.khinsider/platform` 的 `setKeepScreenOn` 给窗口加
+`FLAG_KEEP_SCREEN_ON`：电视屏幕一旦超时就会进 ambient / 待机，待机会掐掉音频输出
+（Chromecast 上表现为「放着放着就停了」）。暂停或播放结束就放开，退到后台时该 flag
+自动失效。电视自己的「无操作 N 小时自动关机」是固件/用户设置，应用管不了。
+
 权限：
 
 - `INTERNET`、`WAKE_LOCK`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_MEDIA_PLAYBACK` —— 播放与通知栏控制

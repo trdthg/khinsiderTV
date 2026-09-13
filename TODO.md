@@ -552,3 +552,39 @@
 - 相关存档：第七轮 I2 的 `<details>` 里有当时 A/B/C 三个方案的完整分析
   （A = 把 MediaStore 当仓库，B = 只加导出（已做），C = 维持「所有文件访问」）。
 
+## M. 电视播放时不要休眠（用户反馈第十轮）
+
+- [x] **M1「Chromecast 播放一段时间会自己休眠」**
+      先说结论：**CPU 唤醒锁一直是有的** —— 播放时 `audio_service` 的
+      `enterPlayingState()` 会拿一把 `PARTIAL_WAKE_LOCK`（`packages/audio_service/
+      android/.../AudioService.java`），所以不是「进程睡着了导致播放卡住」，
+      而是**电视自己睡了**：Chromecast / Google TV 在屏幕空闲到系统超时后进入
+      ambient mode，再往下就是待机，待机一来音频输出就没了 —— 从用户角度就是
+      「放着放着就停了」。
+      修法：播放期间给窗口加 `FLAG_KEEP_SCREEN_ON`（Android 官方支持的做法），
+      屏幕不超时 → 不进 ambient → 不进待机。
+      * Dart：`lib/core/platform/device.dart` 的 `setScreenAwake(bool)`，
+        复用已有的 `dev.khinsider/platform` 通道，方法名 `setKeepScreenOn`；
+      * Kotlin：`MainActivity.setKeepScreenOn()`（`addFlags` / `clearFlags`）；
+      * 接线：新增 `lib/core/widgets/keep_screen_awake.dart`，在 `app.dart` 根部
+        监听 `playerControllerProvider.select((s) => s.playing)`，
+        **开着播才常亮，暂停/播完就放开**（用 `listenManual(fireImmediately: true)`，
+        否则热重启后已经在播的情况会漏掉第一次 `true`）。
+      * 只对 Android 有效（其它平台没有这个 handler，调用落在 `MissingPluginException`
+        的 catch 里，什么都不做）；`FLAG_KEEP_SCREEN_ON` 只在本应用可见时生效，
+        所以退到后台不用手动清。
+- **M2 管不了的部分（要跟用户说清）**：电视自己的「无操作 N 小时后自动关机 /
+  睡眠定时器」是固件/用户设置，应用改不了。如果 TV 设置里开了 auto power off，
+  再久一点还是会关 —— 那不是应用能拦的。
+- **M3 还没做、但值得记一笔**：`AudioService.exitPlayingState()` 只在
+  `androidStopForegroundOnPause = true` 时才释放唤醒锁；而这个应用为了修「暂停后
+  通知栏按钮失灵」把它设成了 `false`，于是**暂停之后那把 `PARTIAL_WAKE_LOCK` 一直
+  握着**（服务的 `onDestroy` 才放）。手机上这意味着暂停后 CPU 不能深睡、白耗电。
+  要修的话：在 `exitPlayingState()` 里无条件 `releaseWakeLock()`（前台服务照旧
+  不退），但这属于改动 vendored 插件 + 需要真机验证，先不动。
+- 回归测试：`test/screen_awake_test.dart` 两条（播放=true、暂停=false、再播=true；
+  平台没有 handler 时静默吞掉）。
+- 顺带踩到的测试坑：**`flutter_test` 里没有被 mock 的 `MethodChannel` 调用不会抛
+  `MissingPluginException`，而是永不返回**（把整个测试进程挂住）。要断言「没有
+  handler 也能活」，得让 mock handler 主动 `throw MissingPluginException(...)`。
+
