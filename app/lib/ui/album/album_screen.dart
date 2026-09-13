@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
-import '../../audio/music_export.dart';
 import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
@@ -19,6 +18,7 @@ import '../shared/public_music.dart';
 import '../now_playing/osd_menu.dart';
 import 'album_metadata.dart';
 import 'album_track_list.dart';
+import 'export_album_screen.dart';
 
 /// Album detail screen with two modes on ONE page (no navigation):
 ///
@@ -879,7 +879,7 @@ class _ExportToMusicButton extends ConsumerWidget {
       message:
           'Copy the downloaded tracks into Music/KHInsider. No permission '
           'needed.',
-      child: OutlinedButton.icon(
+      child: FilledButton.tonalIcon(
         onPressed: () => exportAlbumToMusic(context, ref, album),
         icon: const Icon(Icons.library_music_outlined, size: 18),
         label: const Text('Export to Music'),
@@ -893,116 +893,17 @@ class _ExportToMusicButton extends ConsumerWidget {
 /// The files are contributed through MediaStore, which on Android 10+ needs no
 /// permission at all — that is the whole point: the user does not have to flip
 /// the "all files access" switch for their music to show up in the system music
-/// library. (Older Androids write into `Music/` directly and are already
-/// visible, so the exporter reports them as unsupported instead of duplicating.)
+/// library.
 ///
-/// The outcome is reported in a dialog rather than a `SnackBar`: the album
-/// screen has no `Scaffold` of its own (the search screen owns one), so a
-/// snackbar raised here would only be queued and show up on another screen.
+/// The copy runs on its own screen ([ExportAlbumScreen]) so the album page can
+/// show progress and the result without a `Scaffold` of its own; see that file
+/// and TODO.md I3 for why the flow does not live in a dialog here.
 Future<void> exportAlbumToMusic(
   BuildContext context,
   WidgetRef ref,
   Album album,
-) async {
-  final cache = ref.read(audioCacheManagerProvider);
-  if (await cache.isUsingPublicMusicFolder) {
-    if (!context.mounted) return;
-    await _showExportResult(
-      context,
-      'Nothing to export',
-      'The cache already lives in the system Music folder.',
-    );
-    return;
-  }
-  if (!context.mounted) return;
-
-  final report = await showDialog<MusicExportReport>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => _MusicExportDialog(
-      exporter: MusicExporter(cache, storage: ref.read(androidStorageProvider)),
-      album: album,
-    ),
-  );
-  if (report == null || !context.mounted) return;
-  await _showExportResult(context, 'Export finished', report.summary);
-}
-
-Future<void> _showExportResult(
-  BuildContext context,
-  String title,
-  String message,
 ) {
-  return showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => ExportAlbumScreen(album: album)),
   );
-}
-
-/// A non-dismissible progress dialog that runs the export while it is up and
-/// closes itself with the [MusicExportReport].
-class _MusicExportDialog extends StatefulWidget {
-  const _MusicExportDialog({required this.exporter, required this.album});
-
-  final MusicExporter exporter;
-  final Album album;
-
-  @override
-  State<_MusicExportDialog> createState() => _MusicExportDialogState();
-}
-
-class _MusicExportDialogState extends State<_MusicExportDialog> {
-  int _done = 0;
-  int _total = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_run());
-  }
-
-  Future<void> _run() async {
-    final report = await widget.exporter.exportAlbum(
-      widget.album,
-      onProgress: (done, total) {
-        if (!mounted) return;
-        setState(() {
-          _done = done;
-          _total = total;
-        });
-      },
-    );
-    if (mounted) Navigator.of(context).pop(report);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final total = _total;
-    return AlertDialog(
-      title: const Text('Exporting to Music…'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LinearProgressIndicator(value: total == 0 ? null : _done / total),
-          const SizedBox(height: 12),
-          Text(
-            total == 0
-                ? 'Looking for cached tracks…'
-                : '$_done / $total tracks',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
 }

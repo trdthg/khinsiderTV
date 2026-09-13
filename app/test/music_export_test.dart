@@ -283,17 +283,18 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(storage.exports.single.displayName, '01 Track 1.mp3');
-      expect(find.text('Export finished'), findsOneWidget);
+      expect(find.text('Export to Music'), findsOneWidget);
       expect(
         find.text('Exported 1 track to Music/KHInsider/$_albumTitle'),
         findsOneWidget,
       );
 
-      // Dismissing it leaves the screen usable.
-      await tester.tap(find.text('OK'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Export finished'), findsNothing);
+      // The Done button leaves the export screen.
+      await tester.tap(find.text('Done'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(find.text('Done'), findsNothing);
     });
 
     testWidgets('says so when nothing is cached yet', (tester) async {
@@ -307,7 +308,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(storage.exports, isEmpty);
-      expect(find.text('Export finished'), findsOneWidget);
+      expect(find.text('Export to Music'), findsOneWidget);
       expect(find.text('Nothing cached yet.'), findsOneWidget);
     });
 
@@ -315,7 +316,7 @@ void main() {
       seedCached(root, 1, 'Track 1', cache: build().cache);
       final storage = await pumpAlbum(tester, size: const Size(400, 900));
 
-      final button = find.widgetWithText(OutlinedButton, 'Export to Music');
+      final button = find.widgetWithText(FilledButton, 'Export to Music');
       expect(
         button,
         findsOneWidget,
@@ -329,7 +330,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(storage.exports.single.displayName, '01 Track 1.mp3');
-      expect(find.text('Export finished'), findsOneWidget);
       expect(
         find.text('Exported 1 track to Music/KHInsider/$_albumTitle'),
         findsOneWidget,

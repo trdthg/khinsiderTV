@@ -387,12 +387,29 @@
       * 测试：`test/music_export_test.dart` 10 条（最优副本、优先 flac、跳过下载中、各状态计数、
         进度、同名专辑目录、手机按钮导出、无缓存提示、TV/非 Android 不显示）。
       * 已知副作用（用户已接受）：导出是复制，占双份空间；删缓存不会删 Music 里的副本。
-- [ ] **I3 专辑页没有 `Scaffold`，SnackBar 其实是「延迟到别的页面才弹」**
-      全仓库只有搜索页有 `Scaffold`，所以专辑页里的 `ScaffoldMessenger.showSnackBar`
-      在 debug 会断言失败（`_scaffolds.isNotEmpty`），release 只是入队、
-      等用户回到搜索页才弹出来。导出结果因此改用对话框（见 I2）。
-      受影响的老代码：「Copy cache folder path」按钮、首次启动的公开 Music 提示。
+- [x] **I3 导出对话框把 macOS 的 AOT 编译器搞崩了（已规避）**
+      `flutter build macos --release` 会死在 `gen_snapshot`：
+      `Unexpected object (Class with illegal cid, full-aot):
+       Library:'package:flutter/src/widgets/_window_macos.dart' Class: _Rect@262353218`
+      （CI 的 build-macos 同样失败；本地可复现，两次运行的 hash 完全一样，所以不是偶发）。
+      二分结果：
+      * `album_screen.dart` 回退到 v0.1.24 → 构建成功；
+      * 只保留导出器（`MusicExporter` 可达、不弹任何对话框）→ 成功；
+      * 在 `album_screen.dart` 里加「进度对话框 + 结果对话框」→ 崩；
+      * 只留一个结果 `AlertDialog`、把 `LinearProgressIndicator`/`OutlinedButton` 换成
+        应用里已有的控件、加 `--no-tree-shake-icons` → 全都还是崩。
+      结论：**别继续往 `album_screen.dart` 里堆这类 UI 代码**（那个文件已经很大，
+      像是踩到了编译器的某个上限；同样的对话框放进新文件没问题）。
+      规避：导出流程搬进独立页面 `lib/ui/album/export_album_screen.dart`
+      （自带 `Scaffold`，所以进度条、结果、完成按钮都放得下），`album_screen.dart`
+      只多了一个 `Navigator.push`，构建恢复正常。
+      这个页面顺带解决了原来的 `SnackBar` 问题：专辑页没有 `Scaffold`，
+      从那儿弹的 SnackBar 只会排队、等回到搜索页才出现；导出结果现在显示在自己页面上。
+- [ ] **I4 全应用只有搜索页有 `Scaffold`，专辑页的 SnackBar 实际不显示**
+      `ScaffoldMessenger.showSnackBar` 在专辑页会断言失败（debug）/ 排队（release），
+      受影响的是老代码：「Copy cache folder path」按钮、首次启动的公开 Music 提示。
       修法要先决定 `Scaffold` 放哪（app shell 包一层 / 每个页面自带），尚未处理。
+      注意别踩 I3：改 `album_screen.dart` 之后务必本地跑一次 `flutter build macos --release`。
 
 <details><summary>原始分析（方案比较，留档）</summary>
 
