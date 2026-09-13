@@ -507,3 +507,48 @@
   横幅），都要像 `TvKeyboard` 那样自己说了算；容器节点（什么都画不出来的那种）
   必须 `skipTraversal`，否则它一定会成为目标，然后把焦点环吃掉。
 
+## L. 待办：把「所有缓存」都放进 Music 文件夹（用户提出，暂不实施）
+
+- [ ] **L1 目标（README 里已写明）**：尽量把**音乐、搜索结果、图片**等缓存都直接保存在
+      `Music/` 文件夹，方便用户随意拷贝、清空、做任何事情。
+      用户在第九轮反馈末尾确认：**现在先不做**，只在 TODO 里记一笔。
+- **现状（哪些已经在 Music 里，哪些还没有）**
+  * 音频：`LockCachingAudioSource` 边下边播。缓存根目录默认在应用私有目录（Android）
+    或应用支持目录（桌面）；Android 可以开「所有文件访问」把根目录改成
+    `Music/KHInsider`（`AudioCacheManager` + `AndroidStorage.publicMusicPath`）。
+  * 免权限通道：专辑页的 **Export to Music** 用 MediaStore 把**已缓存**的曲目复制进
+    `Music/KHInsider/<专辑>`（Android 10+ 免权限），只复制、不搬运，不会替用户下载。
+  * 专辑侧车文件：播放过的专辑会往缓存根目录下的专辑文件夹写
+    `other/album.json` + `image/cover.jpg`（200×200 `thumbs_large`）。
+  * **没有**进 Music 的：搜索历史 / 收藏 / 最近查看（`storage/json_kv_store.dart`，
+    应用数据目录里的 JSON 文件）；以及「只在列表里出现过、没播放过」的封面
+    （UI 走 `cached_network_image` 的私有缓存目录）。
+- **为什么不是「换个 API」就完事**
+  1. `LockCachingAudioSource` 需要**文件路径**做 `cacheFile`（just_audio 的要求），
+     MediaStore 只给 `content://`。所以只能是：私有目录暂存 → 下完 insert 进
+     MediaStore（`RELATIVE_PATH` + `IS_PENDING`）→ 删掉私有副本；重播改走
+     `content://`（ExoPlayer 的 `DefaultDataSource` 支持，但 seek / 缓存交互没设备验证）。
+  2. `AudioCacheManager` 整层是**路径式** API（`root()` 返回 `Directory`、
+     `fileFor/fileForSync/categoryDirSync`、`totalSize` 遍历、专辑清单与封面写文件），
+     换成 URI 要重写这一层和所有调用点（含 `_sourceFor` 与缓存扫描）。
+  3. **重装后的归属**：自己贡献给 MediaStore 的文件，重装后算「别的应用」的，
+     读回需要 `READ_MEDIA_AUDIO`（13+）/ `READ_EXTERNAL_STORAGE`（≤12）。
+     「完全免权限」和「重装后还能接着用旧文件」不可兼得。
+  4. 搜索历史 / 收藏属于**应用状态**而不是媒体：放进 `Music/` 需要
+     `MANAGE_EXTERNAL_STORAGE`（11+ 写普通文件），或者塞进 `MediaStore.Files`
+     （会被系统扫描器当成奇怪的媒体文件，不推荐）。建议要么留在应用目录，
+     要么只提供「导出 / 导入」。
+  5. 封面：要让**所有**封面（包括只看过列表、没播放的专辑）也进 `Music/`，
+     得给 `cached_network_image` 换自定义 `CacheManager`（`FileSystem` 指向
+     缓存根，缓存键按专辑分目录）。
+  6. 桌面（macOS/Windows/Linux）本来就没有 MediaStore，写 `~/Music` 是普通文件，
+     但 macOS 有沙箱、需要用户授权目录 —— 也要实测，不能想当然。
+- **如果以后要做，建议的顺序**
+  1. 先把缓存层改成「路径 + URI 双形态」（接口先行，导出/播放两侧都还能走老路）；
+  2. Android 上做「下完搬进 MediaStore」并删私有副本，你在手机 + TV 上实测
+     seek、缓存命中、重装后的表现，再决定是否要读权限；
+  3. 封面缓存换成自定义 `CacheManager`（这一步和 Android 权限无关，风险最低）；
+  4. 搜索历史/收藏保持现状，或另做导入导出。
+- 相关存档：第七轮 I2 的 `<details>` 里有当时 A/B/C 三个方案的完整分析
+  （A = 把 MediaStore 当仓库，B = 只加导出（已做），C = 维持「所有文件访问」）。
+
