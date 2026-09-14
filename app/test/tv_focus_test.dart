@@ -98,6 +98,47 @@ void main() {
     );
   });
 
+  testWidgets('down from the cover focuses the album actions', (tester) async {
+    await pumpWide(tester);
+
+    await tester.tap(find.byType(NowPlayingArt).first);
+    await tester.pump();
+    expect(focusedLabel(), 'cover');
+
+    // The favorite / download buttons sit directly below the cover. The
+    // default traversal used to skip past them and land on a related album.
+    await press(tester, LogicalKeyboardKey.arrowDown);
+    expect(
+      focusedText(),
+      anyOf('Favorite', 'In favorites'),
+      reason: 'Down from the cover must reach the album controls',
+    );
+  });
+
+  testWidgets('left from a track reaches the album actions, not the art', (
+    tester,
+  ) async {
+    await pumpWide(tester);
+
+    await tester.tap(find.byType(NowPlayingArt).first);
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.arrowRight);
+    expect(focusedLabel(), 'row-0');
+
+    await press(tester, LogicalKeyboardKey.arrowLeft);
+    expect(
+      focusedText(),
+      anyOf('Favorite', 'In favorites'),
+      reason:
+          'Left in the normal layout is the way to the album controls; '
+          'the cover stays reachable with Up',
+    );
+
+    // ...and Up from there really is the cover.
+    await press(tester, LogicalKeyboardKey.arrowUp);
+    expect(focusedLabel(), 'cover');
+  });
+
   testWidgets('left on a zen row focuses the cover', (tester) async {
     await pumpWide(tester);
 

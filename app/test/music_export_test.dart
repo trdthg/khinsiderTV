@@ -312,6 +312,25 @@ void main() {
       expect(find.text('Nothing cached yet.'), findsOneWidget);
     });
 
+    testWidgets('the wide (TV) layout offers the download button too', (
+      tester,
+    ) async {
+      final storage = await pumpAlbum(
+        tester,
+        isTelevision: true,
+        size: const Size(1280, 800),
+      );
+
+      expect(
+        find.widgetWithText(FilledButton, 'Export to Music'),
+        findsOneWidget,
+        reason:
+            'televisions used to get only the Favorite button, because the '
+            'export was hidden from them',
+      );
+      expect(storage.exports, isEmpty, reason: 'nothing was tapped yet');
+    });
+
     testWidgets('phone layouts export from the album header', (tester) async {
       seedCached(root, 1, 'Track 1', cache: build().cache);
       final storage = await pumpAlbum(tester, size: const Size(400, 900));

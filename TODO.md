@@ -846,3 +846,36 @@
 - [x] 测试：**154 个通过**（新增 2 条强制同步端到端 + 3 条 LAN 界面 widget 测试：
       两段确认、普通行仍然只合并、确认会过期）。
 
+## W. 未发布：Chromecast 上的聚焦 + 缺下载按钮（等用户测 v0.3.0 的更新后再发）
+
+用户反馈：① Chromecast 上从专辑曲目列表按左键会聚焦到封面而不是左边的专辑操作区；专辑封面上按向下键
+不一定会到 favorite，而是跑到「其他专辑」；② Chromecast 上只有 favorite，没有下载按钮。
+（另外用户问为什么跳到 0.3 —— 因为上一轮的强制覆盖是用户可见的新功能就用了 minor；以后一律 patch。）
+
+### W1 专辑页的 D-Pad 走向（`album_screen.dart`）
+
+问题出在「默认几何遍历」上：封面只有 `DpadNav(right: 第一首)`，向下没指定，于是 Flutter 自己找最近的
+可聚焦控件，会跳过封面正下方的操作区、落到曲目列表尾部的**相关专辑**上；而曲目列表的 Left 是硬编码到
+`coverFocus` 的，普通模式下封面按 Enter 什么都不做（只有 zen 模式才开 OSD 菜单），所以那个方向键等于白按。
+
+- [x] 封面：`DpadNav(right: 第一首, down: 收藏/下载区)`（zen 模式下 down 保持默认 —— 那时信息面板是 `ExcludeFocus` 的）。
+- [x] 曲目列表：Left 改成「普通模式到收藏/下载区，zen 模式到封面」（zen 没有信息面板）。
+- [x] 操作区：`DpadNav(up: 封面, right: 第一首)`，所以封面仍然按上键可达、不会变成孤岛。
+- [x] 新增测试：封面向下 → Favorite（`anyOf('Favorite','In favorites')`）；曲目列表向左 → Favorite，再按上 → 封面。
+
+### W2 TV 上没有下载按钮
+
+不是漏了，是**故意藏起来的**：`_ExportToMusicButton` 第一行就是 `if (isTelevision) return SizedBox.shrink()`，
+而宽屏（TV/桌面）布局用的是 `_InfoPanel`，它根本没有第二个按钮 —— 所以电视上永远只有一个 Favorite。
+现在：宽屏面板里「收藏」下面加同一个导出/下载按钮，并且 `_ExportToMusicButton` 只按
+`supportsPublicMusicFolder`（= 是否 Android）判断，不再看是不是电视。`_CacheFolderHint` 里那个小图标
+保持原样（TV 上仍然隐藏），避免同一个动作在一屏出现两次。
+
+- [x] 新增测试：1280×800 + `isTelevision: true` + `isAndroid: true` 时 `Export to Music` 按钮存在。
+
+### 没有做的事（需要用户确认）
+
+「下载」目前是把**已缓存**（播放过）的曲目导出到 `Music/KHInsider`；应用本身只在播放时边播边下。
+真正的「一键下载整张专辑（不用播放）」是新功能：每首都要先解析直链，而 KHInsider 不能猛刷，
+所以要有限速 + 进度界面 + 取消。等用户决定要不要做。
+

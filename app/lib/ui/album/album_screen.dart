@@ -299,6 +299,18 @@ class _AlbumPage extends ConsumerStatefulWidget {
 }
 
 class _AlbumPageState extends ConsumerState<_AlbumPage> {
+  /// The album's action buttons (favorite / download). Kept here because the
+  /// cover and the track list both have to be able to point the D-pad at it:
+  /// Flutter's default traversal picks by geometry and happily lands on a
+  /// related album in the tail instead.
+  final FocusNode _favoriteFocus = FocusNode(debugLabel: 'album-favorite');
+
+  @override
+  void dispose() {
+    _favoriteFocus.dispose();
+    super.dispose();
+  }
+
   /// Leave the album: pop when there is a route to pop, otherwise fall back to
   /// the search screen.
   ///
@@ -518,6 +530,11 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                           right: widget.rowFocusNodes.isEmpty
                               ? null
                               : widget.rowFocusNodes.first,
+                          // Down means "the album's own controls", which sit
+                          // right below the cover. Without this the default
+                          // traversal wanders into the track list and can land
+                          // on a related album instead.
+                          down: widget.zen ? null : _favoriteFocus,
                           child: DpadTile(
                             focusNode: widget.coverFocus,
                             autofocus: false,
@@ -556,7 +573,16 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                             showRelated: !widget.zen || widget.zenT.value < 1.0,
                             zenT: widget.zenT,
                             isZen: widget.zen,
-                            onLeftArrow: () => widget.coverFocus.requestFocus(),
+                            // In the normal layout the left neighbour the user
+                            // wants is the album's controls (favorite,
+                            // download), not the big picture: in normal mode
+                            // Enter on the cover does nothing at all. Zen has
+                            // no info panel, so there it stays the cover.
+                            onLeftArrow: () =>
+                                (widget.zen
+                                        ? widget.coverFocus
+                                        : _favoriteFocus)
+                                    .requestFocus(),
                           ),
                         ),
                       ),
@@ -572,7 +598,14 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                               excluding: widget.zen,
                               child: IgnorePointer(
                                 ignoring: widget.zen,
-                                child: _InfoPanel(album: album),
+                                child: _InfoPanel(
+                                  album: album,
+                                  favoriteFocus: _favoriteFocus,
+                                  coverFocus: widget.coverFocus,
+                                  firstRowFocus: widget.rowFocusNodes.isEmpty
+                                      ? null
+                                      : widget.rowFocusNodes.first,
+                                ),
                               ),
                             ),
                           ),
@@ -598,9 +631,17 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
 }
 
 class _InfoPanel extends ConsumerWidget {
-  const _InfoPanel({required this.album});
+  const _InfoPanel({
+    required this.album,
+    required this.favoriteFocus,
+    required this.coverFocus,
+    this.firstRowFocus,
+  });
 
   final Album album;
+  final FocusNode favoriteFocus;
+  final FocusNode coverFocus;
+  final FocusNode? firstRowFocus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -618,7 +659,20 @@ class _InfoPanel extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
-        _FavoriteButton(album: album.summary),
+        // Up returns to the cover, Right jumps into the track list, so neither
+        // column has to guess where the other one is.
+        DpadNav(
+          up: coverFocus,
+          right: firstRowFocus,
+          child: _FavoriteButton(
+            album: album.summary,
+            focusNode: favoriteFocus,
+          ),
+        ),
+        // The download / export action. It used to be hidden on televisions,
+        // which left the album page with a single button there.
+        const SizedBox(height: 8),
+        _ExportToMusicButton(album: album),
         if (album.metadata != null) ...[
           const SizedBox(height: 16),
           Text('Details', style: Theme.of(context).textTheme.titleSmall),
@@ -780,9 +834,13 @@ class _CoverPlaceholder extends StatelessWidget {
 /// the gesture, the button underneath is inert (`IgnorePointer`) so a tap
 /// cannot toggle twice.
 class _FavoriteButton extends ConsumerWidget {
-  const _FavoriteButton({required this.album});
+  const _FavoriteButton({required this.album, this.focusNode});
 
   final AlbumSummary album;
+
+  /// Supplied by the wide layout, which points the cover and the track list at
+  /// this node.
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -790,6 +848,7 @@ class _FavoriteButton extends ConsumerWidget {
         ref.watch(favoritesProvider).value?.any((a) => a.id == album.id) ??
         false;
     return DpadTile(
+      focusNode: focusNode,
       borderRadius: 20,
       onSelect: () => ref.read(favoritesProvider.notifier).toggle(album),
       child: ExcludeFocus(
@@ -909,7 +968,11 @@ class _ExportToMusicButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(isTelevisionProvider)) return const SizedBox.shrink();
+    // Used to return nothing on televisions, which is where a user noticed the
+    // album page offering only "Favorite".
+    if (!ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder) {
+      return const SizedBox.shrink();
+    }
     return Tooltip(
       message:
           'Copy the downloaded tracks into Music/KHInsider. No permission '
