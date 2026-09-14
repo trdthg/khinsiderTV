@@ -10,6 +10,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
@@ -60,7 +61,7 @@ class TvTextFieldView(
             // Set ONCE - see the class comment.
             inputType = InputType.TYPE_CLASS_TEXT
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_FULLSCREEN
-            isSingleLine = true
+            setSingleLine(true)
             setBackgroundColor(Color.TRANSPARENT)
             setPadding(
                 (12 * density).toInt(),
@@ -93,11 +94,16 @@ class TvTextFieldView(
         )
 
         editText.setOnEditorActionListener { _, actionId, event ->
+            // Separate val: `event != null &&` is what lets the smart cast see
+            // a non-null KeyEvent on the next line.
+            val pressedEnter =
+                event != null &&
+                    event.keyCode == KeyEvent.KEYCODE_ENTER &&
+                    event.action == KeyEvent.ACTION_DOWN
             val submitted =
                 actionId == EditorInfo.IME_ACTION_SEARCH ||
                     actionId == EditorInfo.IME_ACTION_DONE ||
-                    (event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-                        event.action == KeyEvent.ACTION_DOWN)
+                    pressedEnter
             if (submitted) {
                 channel.invokeMethod("onSubmitted", editText.text.toString())
             }
