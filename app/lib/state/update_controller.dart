@@ -80,11 +80,13 @@ class UpdateController extends Notifier<UpdateState> {
       );
       if (!ref.mounted) return;
       if (Platform.isAndroid) {
+        // The file is on disk either way, so an install the OS refuses must
+        // not look like a failed download (the user would re-download 40MB).
         state = state.copyWith(
           downloadPhase: UpdateDownloadPhase.downloaded,
           downloadedFile: file.path,
         );
-        await service.installApk(file.path);
+        await installDownloaded();
         return;
       }
     } catch (e) {
@@ -129,16 +131,47 @@ class UpdateController extends Notifier<UpdateState> {
     await download();
   }
 
-  /// Reveal the downloaded file in the platform file manager.
+  /// Hands the downloaded file to the platform: on Android the package
+  /// installer, elsewhere the file manager.
   Future<void> revealDownload() async {
+    if (Platform.isAndroid) {
+      await installDownloaded();
+      return;
+    }
+    final path = state.downloadedFile;
+    if (path == null) return;
+    await ref.read(updateServiceProvider).revealInFileManager(path);
+  }
+
+  /// Android only: opens the system installer for the downloaded APK, after
+  /// checking the one permission Android 8+ adds on top of the manifest entry
+  /// (`REQUEST_INSTALL_PACKAGES`). Without that grant the installer opens and
+  /// does nothing at all, which is exactly the "it just fails" report this
+  /// exists to explain.
+  Future<void> installDownloaded() async {
     final path = state.downloadedFile;
     if (path == null) return;
     final service = ref.read(updateServiceProvider);
-    if (Platform.isAndroid) {
-      await service.installApk(path);
+    if (Platform.isAndroid && !await service.canInstallPackages()) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        installError: '系统还没有允许本应用安装应用，请先打开这个开关',
+        installNeedsPermission: true,
+      );
       return;
     }
-    await service.revealInFileManager(path);
+    state = state.copyWith(installError: null, installNeedsPermission: false);
+    try {
+      await service.installApk(path);
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(installError: '打开安装界面失败：$e');
+    }
+  }
+
+  /// Opens the Android setting that [installDownloaded] is waiting for.
+  Future<void> openInstallSettings() async {
+    await ref.read(updateServiceProvider).openInstallSettings();
   }
 
   /// Windows: restarts via a detached batch script (wait -> swap -> relaunch).
@@ -169,6 +202,8 @@ class UpdateState {
     this.downloadProgress = 0,
     this.downloadedFile,
     this.errorMessage,
+    this.installError,
+    this.installNeedsPermission = false,
   });
 
   /// Non-null when a newer release exists.
@@ -191,6 +226,16 @@ class UpdateState {
   final String? downloadedFile;
   final String? errorMessage;
 
+  /// The APK is on disk but the OS would not open its installer (no "install
+  /// unknown apps" grant, no installer activity, ...). Separate from
+  /// [errorMessage] so the UI can offer "retry the install" instead of
+  /// "download again".
+  final String? installError;
+
+  /// True when [installError] is the missing Android permission, which has a
+  /// one-tap fix ([UpdateController.openInstallSettings]).
+  final bool installNeedsPermission;
+
   /// Whether there is an update the user should be told about (the dot on the
   /// settings button).
   bool get updateReady => available != null;
@@ -209,6 +254,8 @@ class UpdateState {
     double? downloadProgress,
     Object? downloadedFile = _unset,
     Object? errorMessage = _unset,
+    Object? installError = _unset,
+    bool? installNeedsPermission,
   }) => UpdateState(
     available: identical(available, _unset)
         ? this.available
@@ -229,6 +276,11 @@ class UpdateState {
     errorMessage: identical(errorMessage, _unset)
         ? this.errorMessage
         : errorMessage as String?,
+    installError: identical(installError, _unset)
+        ? this.installError
+        : installError as String?,
+    installNeedsPermission:
+        installNeedsPermission ?? this.installNeedsPermission,
   );
 }
 

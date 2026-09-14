@@ -100,6 +100,7 @@ class UpdateService {
     void Function(double progress)? onProgress,
   }) async {
     final file = File('${saveDir.path}${Platform.pathSeparator}${asset.name}');
+    await _dropOlderDownloads(saveDir, keep: asset.name);
     await _dio.download(
       asset.url,
       file.path,
@@ -110,6 +111,29 @@ class UpdateService {
     return file;
   }
 
+  /// Deletes previously downloaded installers of the same kind, so a TV with
+  /// very little free space is not asked to hold two 40 MB APKs. Directories
+  /// (the unpacked `pending` update among them) are never touched.
+  static Future<void> _dropOlderDownloads(
+    Directory saveDir, {
+    required String keep,
+  }) async {
+    final extension = keep.contains('.')
+        ? keep.substring(keep.lastIndexOf('.'))
+        : '';
+    if (extension.isEmpty) return;
+    try {
+      await for (final entity in saveDir.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (name == keep || !name.endsWith(extension)) continue;
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   static const MethodChannel _updateChannel = MethodChannel(
     'dev.khinsider/update',
   );
@@ -118,6 +142,27 @@ class UpdateService {
   Future<void> installApk(String path) async {
     if (!Platform.isAndroid) return;
     await _updateChannel.invokeMethod<void>('installApk', {'path': path});
+  }
+
+  /// Whether the OS will let this app hand an APK to its installer. Android 8+
+  /// needs the user to allow "install unknown apps" first, and without it the
+  /// installer opens and silently does nothing.
+  Future<bool> canInstallPackages() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final allowed = await _updateChannel.invokeMethod<bool>(
+        'canInstallPackages',
+      );
+      return allowed ?? true;
+    } on PlatformException {
+      return true; // older host: let the installer decide
+    }
+  }
+
+  /// Opens the system screen where "install unknown apps" is granted.
+  Future<void> openInstallSettings() async {
+    if (!Platform.isAndroid) return;
+    await _updateChannel.invokeMethod<void>('openInstallSettings');
   }
 
   /// Reveals [path] in the platform file manager (Finder / Explorer / xdg).

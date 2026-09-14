@@ -185,6 +185,41 @@ void main() {
     expect(device.favorites, 7);
   });
 
+  test(
+    'every beacon carries the favorites count, so peers see a real number',
+    () async {
+      // The first release sent probes and pongs with no count at all, and every
+      // discovered device showed "0 个收藏" because 0 is also the default.
+      final service = LanService(
+        deviceId: 'aaaaaaaa',
+        deviceName: 'Device A',
+        appVersion: '0.2.0',
+        discoveryPort: 41248,
+        readFavorites: () async => [
+          albumJson('a', 'A'),
+          albumJson('b', 'B'),
+          albumJson('c', 'C'),
+        ],
+        mergeFavorites: (incoming) async => (added: 0, total: 0),
+      );
+
+      expect(service.beaconPayload('probe')['fav'], 0, reason: 'not read yet');
+      expect(await service.refreshFavoriteCount(), 3);
+      for (final kind in ['probe', 'pong']) {
+        final payload = service.beaconPayload(kind);
+        expect(payload['fav'], 3, reason: '$kind must advertise the count');
+        expect(payload['kh'], kind);
+        expect(payload['id'], 'aaaaaaaa');
+      }
+      // ...and a peer that reads such a beacon learns the number.
+      final peer = LanDevice.tryFromJson(
+        service.beaconPayload('pong'),
+        host: '192.168.1.5',
+      );
+      expect(peer!.favorites, 3);
+    },
+  );
+
   test('a device id is random and stable in format', () {
     final one = LanService.newDeviceId();
     final two = LanService.newDeviceId();

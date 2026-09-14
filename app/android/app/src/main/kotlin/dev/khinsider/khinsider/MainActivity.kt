@@ -44,30 +44,85 @@ class MainActivity : AudioServiceActivity() {
         )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.khinsider/update")
             .setMethodCallHandler { call, result ->
-                if (call.method == "installApk") {
-                    val path = call.argument<String>("path")
-                    if (path == null) {
-                        result.error("no_path", "APK path is missing", null)
-                        return@setMethodCallHandler
-                    }
-                    try {
-                        val uri = FileProvider.getUriForFile(
-                            this,
-                            "$packageName.fileprovider",
-                            File(path),
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                when (call.method) {
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("no_path", "APK path is missing", null)
+                            return@setMethodCallHandler
                         }
-                        startActivity(intent)
-                        result.success(null)
-                    } catch (e: Exception) {
-                        result.error("install_failed", e.message, null)
+                        val file = File(path)
+                        if (!file.exists()) {
+                            result.error("missing_file", "APK is gone: $path", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val uri = FileProvider.getUriForFile(
+                                this,
+                                "$packageName.fileprovider",
+                                file,
+                            )
+                            val view = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "application/vnd.android.package-archive")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            // Most launchers/TVs handle ACTION_VIEW for an APK, but
+                            // a plain Android TV image may only have the package
+                            // installer, which also answers ACTION_INSTALL_PACKAGE.
+                            val intent =
+                                if (view.resolveActivity(packageManager) != null) {
+                                    view
+                                } else {
+                                    Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                                        data = uri
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                                    }
+                                }
+                            if (intent.resolveActivity(packageManager) == null) {
+                                result.error(
+                                    "no_installer",
+                                    "No activity can install an APK on this device",
+                                    null,
+                                )
+                                return@setMethodCallHandler
+                            }
+                            startActivity(intent)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("install_failed", e.message, null)
+                        }
                     }
-                } else {
-                    result.notImplemented()
+                    // Android 8+ additionally requires the user to allow "install
+                    // unknown apps" for this app; without it the installer opens
+                    // and instantly does nothing, which is impossible to explain
+                    // to the user from the Dart side.
+                    "canInstallPackages" ->
+                        result.success(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                packageManager.canRequestPackageInstalls()
+                            } else {
+                                true
+                            },
+                        )
+                    "openInstallSettings" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:$packageName"),
+                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("settings_failed", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
             }
 

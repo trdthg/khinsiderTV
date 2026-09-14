@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../audio/audio_cache_manager.dart';
+import '../../core/dir_size.dart';
 import '../../core/widgets/dpad_tile.dart';
+import '../../data/image_cache.dart';
 import '../../data/khinsider_client.dart';
 import '../../state/track_cache_controller.dart';
 import 'settings_widgets.dart';
@@ -27,6 +31,8 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
   bool _publicMusic = false;
   bool _busy = false;
   String? _status;
+  int _pageBytes = 0;
+  int _imageBytes = 0;
 
   AudioCacheManager get _cache => ref.read(audioCacheManagerProvider);
 
@@ -40,16 +46,39 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
     final albums = await _cache.listCachedAlbums();
     final root = await _cache.displayRoot;
     final publicMusic = await _cache.isUsingPublicMusicFolder;
+    final pageBytes = await _sizeOf(_pageCacheDir);
+    final imageBytes = await _sizeOf(_images.directory);
     if (!mounted) return;
     setState(() {
       _albums = albums;
       _root = root;
       _publicMusic = publicMusic;
+      _pageBytes = pageBytes;
+      _imageBytes = imageBytes;
     });
   }
 
-  int get _totalBytes =>
+  /// Size of a cache folder, or 0 when it cannot even be located (no temp
+  /// directory yet, a platform channel that is not there in tests, ...).
+  Future<int> _sizeOf(Future<Directory> Function() locate) async {
+    try {
+      return directorySize(await locate());
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Where the HTML page cache lives (same folder `httpCacheProvider` uses).
+  Future<Directory> _pageCacheDir() => ref.read(httpCacheProvider).directory;
+
+  ImageCacheStore get _images => ref.read(imageCacheProvider);
+
+  int get _albumBytes =>
       (_albums ?? const <CachedAlbum>[]).fold(0, (sum, a) => sum + a.bytes);
+
+  int get _totalBytes => _albumBytes + _pageBytes + _imageBytes;
+
+  Future<void> _clearImageCache() => _images.clear();
 
   Future<void> _clearAll() async {
     final freed = _totalBytes;
@@ -59,13 +88,56 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
     });
     try {
       await _cache.clear();
-      // The cached search/album HTML lives elsewhere and is tiny, but "clear
-      // the cache" should mean all of it.
       await ref.read(httpCacheProvider).clear();
+      await _clearImageCache();
       await _reload();
       setState(() {
         _busy = false;
         _status = freed > 0 ? '已清除 ${formatBytes(freed)}' : '没有可清除的缓存';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = '清除失败：$e';
+      });
+    }
+  }
+
+  Future<void> _clearPages() async {
+    final freed = _pageBytes;
+    setState(() {
+      _busy = true;
+      _status = '正在清除搜索缓存…';
+    });
+    try {
+      await ref.read(httpCacheProvider).clear();
+      await _reload();
+      setState(() {
+        _busy = false;
+        _status = freed > 0 ? '已清除搜索缓存 ${formatBytes(freed)}' : '搜索缓存本来就是空的';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = '清除失败：$e';
+      });
+    }
+  }
+
+  Future<void> _clearImages() async {
+    final freed = _imageBytes;
+    setState(() {
+      _busy = true;
+      _status = '正在清除图片缓存…';
+    });
+    try {
+      await _clearImageCache();
+      await _reload();
+      setState(() {
+        _busy = false;
+        _status = freed > 0 ? '已清除图片缓存 ${formatBytes(freed)}' : '图片缓存本来就是空的';
       });
     } catch (e) {
       if (!mounted) return;
@@ -106,11 +178,16 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
         child: Column(
           children: [
             const SettingsHeader(title: '缓存'),
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: LinearProgressIndicator(),
-              ),
+            // Keeps its height when idle so the list does not jump.
+            SizedBox(
+              height: 4,
+              child: _busy
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: LinearProgressIndicator(),
+                    )
+                  : null,
+            ),
             Expanded(
               child: albums == null
                   ? const Center(child: CircularProgressIndicator())
@@ -137,9 +214,15 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                             SettingsRow(
                               icon: Icons.sd_storage_outlined,
                               title: formatBytes(_totalBytes),
-                              subtitle: albums.isEmpty
-                                  ? '还没有缓存任何专辑'
-                                  : '${albums.length} 张专辑',
+                              subtitle: [
+                                albums.isEmpty
+                                    ? '还没有缓存任何专辑'
+                                    : '${albums.length} 张专辑 ${formatBytes(_albumBytes)}',
+                                if (_pageBytes > 0)
+                                  '搜索 ${formatBytes(_pageBytes)}',
+                                if (_imageBytes > 0)
+                                  '图片 ${formatBytes(_imageBytes)}',
+                              ].join(' · '),
                             ),
                             SettingsRow(
                               icon: Icons.delete_sweep_outlined,
@@ -149,6 +232,32 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                                   : '一键删除已下载的全部专辑文件',
                               danger: true,
                               onSelect: _busy ? null : _clearAll,
+                            ),
+                          ],
+                        ),
+                        SettingsSection(
+                          title: '其它缓存',
+                          children: [
+                            SettingsRow(
+                              icon: Icons.travel_explore_outlined,
+                              title: '搜索与网页缓存',
+                              subtitle:
+                                  '${formatBytes(_pageBytes)} · 搜索结果和专辑页面的 HTML',
+                              trailing: DpadIconButton(
+                                icon: Icons.delete_outline,
+                                tooltip: '清除搜索缓存',
+                                onPressed: _busy ? null : _clearPages,
+                              ),
+                            ),
+                            SettingsRow(
+                              icon: Icons.image_outlined,
+                              title: '图片缓存',
+                              subtitle: '${formatBytes(_imageBytes)} · 封面缩略图',
+                              trailing: DpadIconButton(
+                                icon: Icons.delete_outline,
+                                tooltip: '清除图片缓存',
+                                onPressed: _busy ? null : _clearImages,
+                              ),
                             ),
                           ],
                         ),

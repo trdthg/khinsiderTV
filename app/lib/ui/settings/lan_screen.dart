@@ -26,12 +26,18 @@ class _LanScreenState extends ConsumerState<LanScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      if (mounted) ref.read(lanControllerProvider.notifier).refresh();
+      if (!mounted) return;
+      final notifier = ref.read(lanControllerProvider.notifier);
+      // Peers expire 20s after their last beacon, so discovery has to keep
+      // running while this list is on screen (and only then).
+      notifier.setWatching(true);
+      notifier.refresh();
     });
   }
 
   @override
   void dispose() {
+    ref.read(lanControllerProvider.notifier).setWatching(false);
     _host.dispose();
     _hostFocus.dispose();
     super.dispose();
@@ -50,11 +56,17 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         child: Column(
           children: [
             const SettingsHeader(title: '跨设备同步'),
-            if (state?.busy ?? false)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: LinearProgressIndicator(),
-              ),
+            // The bar keeps its 4px even when idle: swapping it in and out
+            // made the whole list jump while a sync was running.
+            SizedBox(
+              height: 4,
+              child: (state?.busy ?? false)
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: LinearProgressIndicator(),
+                    )
+                  : null,
+            ),
             Expanded(
               child: state == null
                   ? const Center(child: CircularProgressIndicator())
@@ -99,12 +111,12 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                         if (state.enabled)
                           SettingsSection(
                             title: '同一 WiFi 下的设备',
-                            trailing: state.busy
-                                ? null
-                                : TextButton(
-                                    onPressed: notifier.refresh,
-                                    child: const Text('刷新'),
-                                  ),
+                            // Disabled rather than hidden: a button that
+                            // vanishes mid-tap is worse than a grey one.
+                            trailing: TextButton(
+                              onPressed: state.busy ? null : notifier.refresh,
+                              child: const Text('刷新'),
+                            ),
                             children: [
                               if (state.devices.isEmpty)
                                 const SettingsRow(

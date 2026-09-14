@@ -183,6 +183,10 @@ class LanController extends AsyncNotifier<LanState> {
   }
 
   /// Re-broadcast the discovery probe.
+  /// Called by the device-list screen: keeps discovery running while it is
+  /// open (peers expire after 20s) and stops it again on the way out.
+  void setWatching(bool watching) => _service?.setWatching(watching);
+
   Future<void> refresh() async {
     final service = _service;
     if (service == null) return;

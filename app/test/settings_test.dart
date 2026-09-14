@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/core/platform/device.dart';
+import 'package:khinsider/data/image_cache.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/data/update_service.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
@@ -22,6 +24,8 @@ class FakeUpdateController extends UpdateController {
   int checks = 0;
   int downloads = 0;
   int restarts = 0;
+  int installs = 0;
+  int installSettingsOpened = 0;
 
   @override
   UpdateState build() => initial;
@@ -34,6 +38,12 @@ class FakeUpdateController extends UpdateController {
 
   @override
   Future<void> restartAndUpdate() async => restarts++;
+
+  @override
+  Future<void> revealDownload() async => installs++;
+
+  @override
+  Future<void> openInstallSettings() async => installSettingsOpened++;
 }
 
 /// One asset per platform, so the row under test exists whichever OS runs the
@@ -49,17 +59,35 @@ const _assets = [
 ];
 
 void main() {
+  setUp(() {
+    // The cache screen asks path_provider where the thumbnail cache lives. An
+    // unmocked platform channel never answers, which would hang the load.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => Directory.systemTemp.path,
+        );
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
+  });
+
   Future<FakeUpdateController> pump(
     WidgetTester tester, {
     required UpdateState state,
     Widget home = const SettingsScreen(),
     AudioCacheManager? cache,
     HttpCache? pageCache,
+    ImageCacheStore? images,
     bool tv = false,
+    Size size = const Size(460, 1700),
   }) async {
-    tester.view.physicalSize = tv
-        ? const Size(1920, 1080)
-        : const Size(460, 1700);
+    tester.view.physicalSize = tv ? const Size(1920, 1080) : size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -73,6 +101,7 @@ void main() {
           isTelevisionProvider.overrideWithValue(tv),
           if (cache != null) audioCacheManagerProvider.overrideWithValue(cache),
           if (pageCache != null) httpCacheProvider.overrideWithValue(pageCache),
+          if (images != null) imageCacheProvider.overrideWithValue(images),
         ],
         child: MaterialApp(home: home),
       ),
@@ -125,6 +154,56 @@ void main() {
       expect(fake.checks, 1);
     });
 
+    testWidgets('names the asset it is about to download', (tester) async {
+      await pump(
+        tester,
+        state: const UpdateState(
+          available: UpdateInfo(
+            version: '9.9.9',
+            url: 'https://x',
+            assets: _assets,
+          ),
+        ),
+      );
+
+      // "Which package is it downloading?" is a fair question on a TV, and the
+      // answer differs per platform, so ask the picker that decides.
+      final expected = UpdateService(
+        repoSlug: 'trdthg/khinsiderTV',
+      ).assetForPlatform(_assets)!.name;
+      expect(find.textContaining(expected), findsWidgets);
+    });
+
+    testWidgets('a refused install is offered again, not re-downloaded', (
+      tester,
+    ) async {
+      final fake = await pump(
+        tester,
+        state: const UpdateState(
+          available: UpdateInfo(
+            version: '9.9.9',
+            url: 'https://x',
+            assets: _assets,
+          ),
+          downloadPhase: UpdateDownloadPhase.downloaded,
+          downloadedFile: '/tmp/khinsider-9.9.9-universal.apk',
+          installError: '系统还没有允许本应用安装应用，请先打开这个开关',
+          installNeedsPermission: true,
+        ),
+      );
+
+      expect(find.text('重试安装'), findsOneWidget);
+      expect(find.textContaining('系统还没有允许'), findsOneWidget);
+      await tester.tap(find.text('重试安装'));
+      await tester.pump();
+      expect(fake.installs, 1);
+      expect(fake.downloads, 0, reason: 'the APK is already on disk');
+
+      await tester.tap(find.text('去允许安装未知应用'));
+      await tester.pump();
+      expect(fake.installSettingsOpened, 1);
+    });
+
     testWidgets('shows a restart for a downloaded desktop update', (
       tester,
     ) async {
@@ -174,6 +253,9 @@ void main() {
         state: const UpdateState(),
         home: const CacheScreen(),
         cache: cache,
+        pageCache: FakePageCache(),
+        images: FakeImageCache(),
+        size: const Size(460, 2600),
       );
 
       expect(find.text('Album One'), findsOneWidget);
@@ -209,15 +291,12 @@ void main() {
         home: const CacheScreen(),
         cache: cache,
         pageCache: FakePageCache(),
+        images: FakeImageCache(),
+        size: const Size(460, 2600),
       );
 
       await tester.tap(find.text('清除全部缓存'));
       await tester.pump();
-      // The page cache is real (HttpCache), so its IO only progresses inside
-      // runAsync; the fake cache manager's futures are plain microtasks.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 80)),
-      );
       await tester.pump();
 
       expect(cache.cleared, 1);
@@ -236,6 +315,22 @@ class FakePageCache extends HttpCache {
   FakePageCache() : super(() async => Directory('/tmp/kh-pages-unused'));
 
   int cleared = 0;
+
+  @override
+  Future<Directory> get directory async => Directory('/tmp/kh-pages-unused');
+
+  @override
+  Future<void> clear() async => cleared++;
+}
+
+/// A thumbnail cache with no disk behind it.
+class FakeImageCache extends ImageCacheStore {
+  FakeImageCache() : super();
+
+  int cleared = 0;
+
+  @override
+  Future<Directory> directory() async => Directory('/tmp/kh-images-unused');
 
   @override
   Future<void> clear() async => cleared++;

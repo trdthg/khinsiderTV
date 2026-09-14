@@ -759,3 +759,27 @@
 - [ ] **S8 同步播放 / 组环绕声**（用户需求 ② 的后半）——下一轮做：主机把播放状态（曲目、位置、播放/暂停、跳转）
   通过 WebSocket 推给跟随设备，跟随端按 RTT 补偿起播，并提供每设备延迟微调（毫秒）用于多音箱对齐。
 
+## T. v0.2.1：反馈修复（用户报的 5 件事）
+
+- [x] **T1 设备列表里的收藏数一直是 0**（bug）：`probe`/`pong` 信标压根没带收藏数量，而 `LanDevice`
+  的默认值就是 0，所以「从没说过」和「真的是 0」长得一样。现在两种信标都带 `fav`，`pong` 里的数字是现读的
+  （不是缓存值）；`_upsert` 也不会用「没带数字」的 0 覆盖已知数量。顺手修了一个隐藏问题：**没人持续探测时，
+  20 秒后设备会全部过期消失** —— 现在设备列表页打开时每 15 秒重新探测一次（`setWatching`），离开就停。
+- [x] **T2 刷新按钮消失 + 布局抖动**：`trailing: busy ? null : TextButton(...)` 改成始终存在的
+  `TextButton(onPressed: busy ? null : ...)`（变灰禁用），顶部进度条改成固定占位 4px（`SizedBox`），
+  缓存页同样处理。
+- [x] **T3 缓存页新增「搜索与网页缓存」和「图片缓存」**：总占用现在把两者也算进去（并分行显示明细），
+  都可以单独清除；「清除全部」也包含它们。图片缓存走 `flutter_cache_manager`（原本就是传递依赖，现在提到
+  直接依赖），清完还会清 Flutter 的解码位图缓存，否则缩略图会继续显示。为此把 `HttpCache` 暴露了
+  `directory`，并新增 `imageCacheProvider`（顺带让 widget 测试可以替换掉它 —— path_provider 在测试里不会应答）。
+- [x] **T4 Chromecast 更新失败**：原因是 Android 8+ 除了清单里的 `REQUEST_INSTALL_PACKAGES`，还要用户为
+  「本应用」打开**安装未知应用**，否则系统安装界面一闪而过、Dart 侧完全看不到原因。新增
+  `canInstallPackages` / `openInstallSettings` 两个 channel 方法：设置页会明确说「系统还没有允许本应用安装应用」
+  并给出跳转按钮；安装失败不再被当成下载失败（保留安装包、阶段仍是「已下载」，只显示 `installError`），
+  重试安装不会重新下载；`ACTION_VIEW` 没有处理器时退回 `ACTION_INSTALL_PACKAGE`；下载前清掉旧的同类型安装包。
+  另外设置页现在会显示**要下载的包名**（armv7 的 Chromecast 拿到的是 `-universal.apk` 通用包，包含 armv7 + arm64）。
+- [x] **T5 进度条手势**：Android/iOS 上拖动改为**相对位移**（手指按在哪里不重要，按移动的距离调整），
+  桌面/遥控仍是绝对定位，点一下仍是绝对跳转；拖动时条自己渲染目标位置，松手才 seek 一次。
+- [x] **T6 测试**：`settings_test.dart` 8 条（含「拒绝安装后重试不重新下载」「显示要下载的包名」）、
+  `seek_bar_test.dart` 4 条（新增）、`lan_test.dart` 9 条（含信标必须带 `fav`）；全套 **143 个测试通过**。
+

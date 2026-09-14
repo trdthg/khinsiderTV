@@ -27,6 +27,10 @@ class HttpCache {
     return dir;
   }
 
+  /// The cache directory once it exists. Used to report (and clear) how much
+  /// space the page cache takes.
+  Future<Directory> get directory => _resolveDir();
+
   String _key(String url) => sha1.convert(utf8.encode(url)).toString();
 
   File _bodyFile(Directory dir, String key) =>

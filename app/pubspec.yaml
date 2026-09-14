@@ -46,6 +46,9 @@ dependencies:
   dio: ^5.11.1
   crypto: ^3.0.7
   cached_network_image: ^4.0.0
+  # Direct, to empty the cover-thumbnail cache from Settings (the package is
+  # already pulled in by cached_network_image).
+  flutter_cache_manager: ^3.4.2
   just_audio_media_kit: ^2.1.0
   media_kit_libs_windows_audio: ^1.0.9
   media_kit_libs_linux: ^1.2.1

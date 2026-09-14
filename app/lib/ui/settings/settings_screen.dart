@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -65,12 +67,7 @@ class SettingsScreen extends ConsumerWidget {
                               ? null
                               : info.notes.trim().split('\n').first,
                         ),
-                        ..._downloadRows(
-                          context,
-                          update,
-                          notifier,
-                          asset != null,
-                        ),
+                        ..._downloadRows(context, update, notifier, asset),
                         SettingsRow(
                           icon: Icons.open_in_new,
                           title: '打开发布页',
@@ -149,12 +146,24 @@ class SettingsScreen extends ConsumerWidget {
     return '从 GitHub Releases 获取最新版本';
   }
 
+  /// Size of the downloaded installer, for the row that says it is ready.
+  /// Best effort: a missing file must not break the whole screen.
+  String? _fileSize(String? path) {
+    if (path == null) return null;
+    try {
+      final file = File(path);
+      return file.existsSync() ? formatBytes(file.lengthSync()) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The one row that moves an update along, whichever phase it is in.
   List<Widget> _downloadRows(
     BuildContext context,
     UpdateState update,
     UpdateController notifier,
-    bool hasAsset,
+    UpdateAsset? asset,
   ) {
     final phase = update.downloadPhase;
     switch (phase) {
@@ -163,7 +172,10 @@ class SettingsScreen extends ConsumerWidget {
           SettingsRow(
             icon: Icons.downloading,
             title: '下载中 ${(update.downloadProgress * 100).toStringAsFixed(0)}%',
-            subtitle: '下载完成后会自动开始安装',
+            subtitle: [
+              if (asset != null) asset.name,
+              '下载完成后会自动打开安装界面',
+            ].join(' · '),
             trailing: SizedBox(
               width: 72,
               child: LinearProgressIndicator(
@@ -197,13 +209,27 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ];
       case UpdateDownloadPhase.downloaded:
+        final size = _fileSize(update.downloadedFile);
         return [
           SettingsRow(
             icon: Icons.install_mobile_outlined,
-            title: '安装',
-            subtitle: '安装包已下载，再次打开系统安装界面',
+            title: update.installError == null ? '安装' : '重试安装',
+            subtitle:
+                update.installError ??
+                '安装包已下载${size == null ? '' : '（$size）'}，点这里打开系统安装界面',
+            danger: update.installError != null,
             onSelect: notifier.revealDownload,
           ),
+          // Android 8+ wants "install unknown apps" granted to this app on top
+          // of REQUEST_INSTALL_PACKAGES; without it the installer opens and
+          // does nothing, so offer the one screen that fixes it.
+          if (update.installNeedsPermission)
+            SettingsRow(
+              icon: Icons.settings_applications_outlined,
+              title: '去允许安装未知应用',
+              subtitle: '允许之后回到这里，再点一次「重试安装」',
+              onSelect: notifier.openInstallSettings,
+            ),
         ];
       case UpdateDownloadPhase.failed:
         return [
@@ -220,7 +246,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ];
       case UpdateDownloadPhase.idle:
-        if (!hasAsset) {
+        if (asset == null) {
           return const [
             SettingsRow(
               icon: Icons.open_in_new,
@@ -233,7 +259,11 @@ class SettingsScreen extends ConsumerWidget {
           SettingsRow(
             icon: Icons.download_outlined,
             title: '下载并安装',
-            subtitle: '下载完成后直接安装，不再询问',
+            subtitle: [
+              asset.name,
+              if (Platform.isAndroid) '通用安装包',
+              '下载完成后直接安装，不再询问',
+            ].join(' · '),
             onSelect: update.checking ? null : notifier.download,
           ),
         ];

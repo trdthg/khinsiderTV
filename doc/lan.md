@@ -26,6 +26,10 @@ Implemented in `lib/data/lan/` (transport) and `lib/state/lan_controller.dart`
 * A device that hears a `probe` answers `pong` **directly to the sender** and
   also records the sender, so one refresh teaches both sides about each other.
   A `bye` on shutdown removes it immediately.
+* Every beacon (`probe` and `pong`) carries `fav`, the sender's favorites count,
+  so the device list shows a real number instead of a placeholder 0.
+* Discovery only runs while a device list is on screen (every 15s): peers expire
+  permanently, so somebody has to keep asking, and nobody else pays for it.
 * Peers that have not been heard from for 20 seconds are dropped, so the list
   reflects "around right now" — both apps must be open.
 * Manual addresses are just unicast probes; they are remembered in the KV store

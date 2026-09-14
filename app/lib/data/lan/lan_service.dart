@@ -94,6 +94,8 @@ class LanService {
   RawDatagramSocket? _udp;
   HttpServer? _http;
   Timer? _sweeper;
+  Timer? _prober;
+  bool _watching = false;
   bool _running = false;
 
   final _devices = <String, LanDevice>{};
@@ -147,6 +149,9 @@ class LanService {
     _running = false;
     _sweeper?.cancel();
     _sweeper = null;
+    _prober?.cancel();
+    _prober = null;
+    _watching = false;
     try {
       _udp?.send(
         utf8.encode(jsonEncode({'kh': 'bye', 'id': deviceId})),
@@ -166,15 +171,8 @@ class LanService {
   Future<void> refresh() async {
     final socket = _udp;
     if (socket == null) return;
-    final probe = utf8.encode(
-      jsonEncode({
-        'kh': 'probe',
-        'id': deviceId,
-        'name': deviceName,
-        'v': appVersion,
-        'port': _http?.port ?? 0,
-      }),
-    );
+    await refreshFavoriteCount();
+    final probe = _beacon('probe');
     for (final target in await _broadcastTargets()) {
       try {
         socket.send(probe, target, discoveryPort);
@@ -204,6 +202,37 @@ class LanService {
   }
 
   Set<String> get manualHosts => {..._manualHosts};
+
+  /// Favorites count advertised in beacons. Refreshed on [start], on every
+  /// [refresh] and whenever the UI knows the list changed; until then peers see
+  /// 0, which is the documented "never said" value.
+  int favoriteCount = 0;
+
+  /// Peers are dropped 20s after their last beacon, so whoever is showing a
+  /// device list has to keep asking; nobody else pays for the traffic.
+  void setWatching(bool watching) {
+    if (_watching == watching) return;
+    _watching = watching;
+    _prober?.cancel();
+    _prober = null;
+    if (!watching || _udp == null) return;
+    unawaited(refresh());
+    _prober = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(refresh()),
+    );
+  }
+
+  bool get isWatching => _watching;
+
+  Future<int> refreshFavoriteCount() async {
+    try {
+      favoriteCount = (await readFavorites()).length;
+    } catch (_) {
+      // Keep the last known number rather than dropping to 0 on a hiccup.
+    }
+    return favoriteCount;
+  }
 
   /// Read a peer's favorites and merge them into this device's.
   Future<LanSyncResult> pullFavorites(LanDevice peer) async {
@@ -260,15 +289,8 @@ class LanService {
   Future<LanDevice?> _probeHost(String host) async {
     final socket = _udp;
     if (socket == null) return null;
-    final probe = utf8.encode(
-      jsonEncode({
-        'kh': 'probe',
-        'id': deviceId,
-        'name': deviceName,
-        'v': appVersion,
-        'port': _http?.port ?? 0,
-      }),
-    );
+    await refreshFavoriteCount();
+    final probe = _beacon('probe');
     // Subscribe before sending: the answer can arrive before `send` returns,
     // and a broadcast stream does not replay.
     final reply = deviceStream
@@ -317,31 +339,54 @@ class LanService {
         host: datagram.address.address,
       );
       if (peer == null) continue;
-      try {
-        socket.send(
-          utf8.encode(
-            jsonEncode({
-              'kh': 'pong',
-              'id': deviceId,
-              'name': deviceName,
-              'v': appVersion,
-              'port': _http?.port ?? 0,
-            }),
-          ),
-          datagram.address,
-          discoveryPort,
-        );
-      } catch (_) {}
+      unawaited(_replyPong(datagram.address));
       _upsert(peer);
     }
+  }
+
+  /// A beacon carrying this device's address, HTTP port and favorites count,
+  /// so one exchange is enough for the other side to show something real.
+  ///
+  /// Public because the payload is the contract between two devices and the
+  /// list is otherwise only reachable through a broadcast.
+  Map<String, Object?> beaconPayload(String kind) => {
+    'kh': kind,
+    'id': deviceId,
+    'name': deviceName,
+    'v': appVersion,
+    'port': _http?.port ?? 0,
+    'fav': favoriteCount,
+  };
+
+  List<int> _beacon(String kind) =>
+      utf8.encode(jsonEncode(beaconPayload(kind)));
+
+  /// Answers a probe. The count is read here rather than reused from the cache
+  /// so the reply is never stale.
+  Future<void> _replyPong(InternetAddress to) async {
+    final socket = _udp;
+    if (socket == null) return;
+    await refreshFavoriteCount();
+    try {
+      socket.send(_beacon('pong'), to, discoveryPort);
+    } catch (_) {}
   }
 
   void _upsert(LanDevice peer) {
     if (peer.id == deviceId) return;
     final existing = _devices[peer.id];
-    _devices[peer.id] = existing == null
+    final merged = existing == null
         ? peer
-        : peer.copyWith(lastSeen: DateTime.now(), manual: existing.manual);
+        : peer.copyWith(
+            lastSeen: DateTime.now(),
+            manual: existing.manual,
+            // Beacons that carry no count send 0 ("never said"); a device with
+            // no favorites at all would have to have synced them away.
+            favorites: peer.favorites == 0 && existing.favorites > 0
+                ? existing.favorites
+                : peer.favorites,
+          );
+    _devices[peer.id] = merged;
     _emit();
   }
 
