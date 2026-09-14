@@ -139,8 +139,15 @@ jobs:
         working-directory: app
         run: |
           flutter pub get
+          # media_kit fetches prebuilt native libs at configure time and aborts
+          # with "Integrity check failed, please try to re-build project again"
+          # when that download comes back short. Retrying after a clean keeps a
+          # transient network hiccup from costing a whole release.
           flutter build macos --release \
-            --build-name=${{ needs.version.outputs.version }}
+            --build-name=${{ needs.version.outputs.version }} \
+            || (flutter clean && flutter pub get && \
+                flutter build macos --release \
+                  --build-name=${{ needs.version.outputs.version }})
       - name: Create DMG + zip app bundle
         run: |
           mkdir -p dist
@@ -173,8 +180,15 @@ jobs:
         working-directory: app
         run: |
           flutter pub get
+          # media_kit fetches prebuilt native libs at configure time and aborts
+          # with "Integrity check failed, please try to re-build project again"
+          # when that download comes back short. Retrying after a clean keeps a
+          # transient network hiccup from costing a whole release.
           flutter build ios --release --no-codesign \
-            --build-name=${{ needs.version.outputs.version }}
+            --build-name=${{ needs.version.outputs.version }} \
+            || (flutter clean && flutter pub get && \
+                flutter build ios --release --no-codesign \
+                  --build-name=${{ needs.version.outputs.version }})
       - name: Package unsigned IPA
         run: |
           mkdir -p dist Payload
@@ -201,8 +215,15 @@ jobs:
         shell: bash
         run: |
           flutter pub get
+          # media_kit fetches prebuilt native libs at configure time and aborts
+          # with "Integrity check failed, please try to re-build project again"
+          # when that download comes back short. Retrying after a clean keeps a
+          # transient network hiccup from costing a whole release.
           flutter build windows --release \
-            --build-name=${{ needs.version.outputs.version }}
+            --build-name=${{ needs.version.outputs.version }} \
+            || (flutter clean && flutter pub get && \
+                flutter build windows --release \
+                  --build-name=${{ needs.version.outputs.version }})
       - name: Zip
         shell: pwsh
         run: |
