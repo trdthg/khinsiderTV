@@ -112,8 +112,8 @@ class TvTextFieldView(
 
         // The D-pad only reaches the EditText while the IME is closed (with it
         // open the arrow keys belong to Gboard), which is exactly when leaving
-        // the field should work: Down to the results, Left/Right to the
-        // keyboard-mode button, Up towards the update banner.
+        // the field should work: Down to the results, Up towards the update
+        // banner. Left/Right stay inside the text (they move the caret).
         editText.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
@@ -124,14 +124,6 @@ class TvTextFieldView(
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     channel.invokeMethod("onMoveUp", null)
                     true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (editText.selectionStart <= 0) {
-                        channel.invokeMethod("onMoveLeft", null)
-                        true
-                    } else {
-                        false
-                    }
                 }
                 else -> false
             }

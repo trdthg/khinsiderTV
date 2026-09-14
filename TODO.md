@@ -711,3 +711,18 @@
   「（自绘模式下）左→键盘按钮、右→输入框」。全套 123 个测试通过。
 - [ ] **Q4 待用户真机确认**：确认系统键盘能打字后，**删掉整个自绘键盘**（`TvKeyboard` + `TvKeyboardMode` 的 builtin 分支 + 测试 + 搜索框左侧按钮）。
 
+## R. 第十五轮：删掉自绘键盘（系统键盘已在真机确认可用）
+
+- [x] **R1 用户确认**：`能用了` —— v0.1.33 在 Chromecast 上系统键盘（Gboard TV）方向键正常，可以打字、可以搜索。
+- [x] **R2 删除范围**：
+  - 删掉 `lib/ui/search/tv_keyboard.dart`（整个 Leanback 风格 D-pad 键盘，含 `⇧` 大写锁定与符号层）。
+  - 删掉 `preferences_store.dart` 里的 `TvKeyboardMode` / `TvKeyboardModeController` / `tvKeyboardModeProvider` /
+    `tv_keyboard_mode` 键（老用户的这个键留在 JSON 里没人读，无害）。
+  - 删掉搜索页的：`_keyboardOpen`、`_setKeyboardOpen`、`_builtinKeyboard`、`_keyboardModeFocus` + `_onKeyboardModeKey`
+    + `_toggleKeyboardMode`（键盘按钮）、`_append`/`_backspace`/`_caretAtStart`（只为只读字段服务）、
+    以及为了收键盘而加的 `PopScope`（现在返回键交给平台：第一次收键盘、第二次退页面）。
+  - 平台视图侧删掉 `onMoveLeft`（左边已经没有键盘按钮了；文字里左右键仍然移动光标）。
+- [x] **R3 测试**：`test/tv_search_test.dart` 重写为 5 条 —— TV 渲染平台视图输入框（没有 `TextField`）、
+  手机/桌面仍是普通可编辑 `TextField`、平台视图的焦点锚点、创建参数带 hint/viewType、手机端 Search 按钮提交查询。
+- 历史记录保留在上面（O/P/Q 三节），不再需要的实现细节只在这里标记删除。
+

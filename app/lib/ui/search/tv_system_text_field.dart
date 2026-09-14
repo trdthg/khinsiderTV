@@ -20,9 +20,7 @@ import 'package:flutter/services.dart';
 /// update banner) come back as callbacks, because a platform view holds the
 /// focus while the IME is closed.
 ///
-/// Only used on TVs in system-keyboard mode; phones and desktops keep the
-/// ordinary [TextField], and the app's own D-pad keyboard is still available as
-/// the fallback (see `TvKeyboard`).
+/// Only used on TVs; phones and desktops keep the ordinary [TextField].
 class TvSystemTextField extends StatefulWidget {
   const TvSystemTextField({
     super.key,
@@ -31,7 +29,6 @@ class TvSystemTextField extends StatefulWidget {
     required this.onSubmitted,
     required this.onMoveDown,
     required this.onMoveUp,
-    required this.onMoveLeft,
     this.height = 48,
   });
 
@@ -43,7 +40,6 @@ class TvSystemTextField extends StatefulWidget {
   /// host screen has to move it.
   final VoidCallback onMoveDown;
   final VoidCallback onMoveUp;
-  final VoidCallback onMoveLeft;
 
   final double height;
 
@@ -120,8 +116,6 @@ class TvSystemTextFieldState extends State<TvSystemTextField> {
           widget.onMoveDown();
         case 'onMoveUp':
           widget.onMoveUp();
-        case 'onMoveLeft':
-          widget.onMoveLeft();
       }
       return null;
     });

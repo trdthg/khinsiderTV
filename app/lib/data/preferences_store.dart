@@ -8,7 +8,6 @@ import 'storage/json_kv_store.dart';
 const _kFavorites = 'favorites';
 const _kSearchHistory = 'search_history';
 const _kRecentAlbums = 'recent_albums';
-const _kTvKeyboardMode = 'tv_keyboard_mode';
 
 const _maxSearchHistory = 20;
 const _maxRecentAlbums = 24;
@@ -103,51 +102,6 @@ class RecentAlbumsController extends AsyncNotifier<List<AlbumSummary>> {
 final recentAlbumsProvider =
     AsyncNotifierProvider<RecentAlbumsController, List<AlbumSummary>>(
       RecentAlbumsController.new,
-    );
-
-/// How a TV types into the search field.
-///
-/// The system IME is the default: Android TV shows its own D-pad-navigable
-/// keyboard, which is what the user asked for after trying the built-in one.
-/// [builtin] keeps the app's own keyboard as an explicit fallback, for remotes
-/// or TV boxes whose IME cannot be driven from a Flutter text field.
-enum TvKeyboardMode {
-  /// The platform IME (Android TV's own keyboard).
-  system,
-
-  /// The app's D-pad keyboard (`TvKeyboard`).
-  builtin,
-}
-
-/// Persisted [TvKeyboardMode] (TV only; phones and desktops always use the
-/// system IME, which is the normal editable-field path).
-class TvKeyboardModeController extends AsyncNotifier<TvKeyboardMode> {
-  @override
-  Future<TvKeyboardMode> build() async {
-    final store = await ref.watch(jsonKvStoreProvider.future);
-    final raw = store.read<String>(_kTvKeyboardMode);
-    return TvKeyboardMode.values.firstWhere(
-      (m) => m.name == raw,
-      orElse: () => TvKeyboardMode.system,
-    );
-  }
-
-  Future<void> set(TvKeyboardMode mode) async {
-    final store = await ref.read(jsonKvStoreProvider.future);
-    store.write(_kTvKeyboardMode, mode.name);
-    state = AsyncData(mode);
-  }
-
-  Future<void> toggle() => set(
-    state.value == TvKeyboardMode.builtin
-        ? TvKeyboardMode.system
-        : TvKeyboardMode.builtin,
-  );
-}
-
-final tvKeyboardModeProvider =
-    AsyncNotifierProvider<TvKeyboardModeController, TvKeyboardMode>(
-      TvKeyboardModeController.new,
     );
 
 // -- (de)serialization -------------------------------------------------------
