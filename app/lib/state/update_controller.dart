@@ -6,14 +6,17 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../data/update_service.dart';
 
-/// Checks GitHub Releases for a version newer than the running app and
-/// exposes the result for the update banner.
+/// Checks GitHub Releases for a version newer than the running app.
+///
+/// The result is shown in Settings (and as a dot on the settings button) — the
+/// app deliberately has no popup or banner for updates any more.
 class UpdateController extends Notifier<UpdateState> {
   static const repoSlug = 'trdthg/khinsiderTV';
 
   @override
   UpdateState build() {
-    // One silent check per launch; failures are invisible to the user.
+    // One silent check per launch. Nothing pops up; Settings shows the result
+    // and the settings button gets a dot when there is something to install.
     // Deferred: reading/writing state must happen after build() returns.
     Future.microtask(() {
       if (ref.mounted) unawaited(check());
@@ -21,8 +24,10 @@ class UpdateController extends Notifier<UpdateState> {
     return const UpdateState();
   }
 
+  /// Also the "check for updates" button in Settings: it reports what it found
+  /// (including "already up to date") instead of staying silent.
   Future<void> check() async {
-    state = state.copyWith(checking: true);
+    state = state.copyWith(checking: true, checkError: null);
     try {
       final pkg = await PackageInfo.fromPlatform();
       final service = ref.read(updateServiceProvider);
@@ -30,14 +35,21 @@ class UpdateController extends Notifier<UpdateState> {
         currentVersion: pkg.version,
       );
       if (!ref.mounted) return;
-      state = state.copyWith(available: available, checking: false);
-    } catch (_) {
+      state = state.copyWith(
+        available: available,
+        checking: false,
+        hasChecked: true,
+        currentVersion: pkg.version,
+      );
+    } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(checking: false);
+      state = state.copyWith(
+        checking: false,
+        hasChecked: true,
+        checkError: '检查更新失败：$e',
+      );
     }
   }
-
-  void dismiss() => state = state.copyWith(dismissed: true);
 
   /// Auto-download the platform asset; then the banner offers to reveal it.
   Future<void> download() async {
@@ -150,7 +162,9 @@ class UpdateState {
   const UpdateState({
     this.available,
     this.checking = false,
-    this.dismissed = false,
+    this.hasChecked = false,
+    this.currentVersion,
+    this.checkError,
     this.downloadPhase = UpdateDownloadPhase.idle,
     this.downloadProgress = 0,
     this.downloadedFile,
@@ -160,14 +174,26 @@ class UpdateState {
   /// Non-null when a newer release exists.
   final UpdateInfo? available;
   final bool checking;
-  final bool dismissed;
+
+  /// True once a check finished, successfully or not: a finished check with no
+  /// [available] means "already up to date", which is worth saying out loud.
+  final bool hasChecked;
+
+  /// The running version, filled in by [UpdateController.check].
+  final String? currentVersion;
+
+  /// A check that failed (no network, GitHub rate limit, ...). Kept apart from
+  /// [errorMessage], which belongs to the download.
+  final String? checkError;
 
   final UpdateDownloadPhase downloadPhase;
   final double downloadProgress;
   final String? downloadedFile;
   final String? errorMessage;
 
-  bool get showBanner => available != null && !dismissed;
+  /// Whether there is an update the user should be told about (the dot on the
+  /// settings button).
+  bool get updateReady => available != null;
 
   /// Sentinel: lets [copyWith] tell an explicitly passed `null` apart from
   /// "leave this field alone", so an error/file can actually be cleared.
@@ -176,7 +202,9 @@ class UpdateState {
   UpdateState copyWith({
     Object? available = _unset,
     bool? checking,
-    bool? dismissed,
+    bool? hasChecked,
+    Object? currentVersion = _unset,
+    Object? checkError = _unset,
     UpdateDownloadPhase? downloadPhase,
     double? downloadProgress,
     Object? downloadedFile = _unset,
@@ -186,7 +214,13 @@ class UpdateState {
         ? this.available
         : available as UpdateInfo?,
     checking: checking ?? this.checking,
-    dismissed: dismissed ?? this.dismissed,
+    hasChecked: hasChecked ?? this.hasChecked,
+    currentVersion: identical(currentVersion, _unset)
+        ? this.currentVersion
+        : currentVersion as String?,
+    checkError: identical(checkError, _unset)
+        ? this.checkError
+        : checkError as String?,
     downloadPhase: downloadPhase ?? this.downloadPhase,
     downloadProgress: downloadProgress ?? this.downloadProgress,
     downloadedFile: identical(downloadedFile, _unset)
@@ -204,3 +238,10 @@ final updateControllerProvider =
 final updateServiceProvider = Provider<UpdateService>(
   (ref) => UpdateService(repoSlug: UpdateController.repoSlug),
 );
+
+/// The running app version, for the About section (independent of whether an
+/// update check has ever run).
+final appVersionProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return info.version;
+});

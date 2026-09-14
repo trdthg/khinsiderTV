@@ -726,3 +726,36 @@
   手机/桌面仍是普通可编辑 `TextField`、平台视图的焦点锚点、创建参数带 hint/viewType、手机端 Search 按钮提交查询。
 - 历史记录保留在上面（O/P/Q 三节），不再需要的实现细节只在这里标记删除。
 
+## S. 第十六轮：设置页 + 局域网跨设备同步（收藏）
+
+用户需求：① 局域网跨设备（同步收藏 / 同步播放组环绕声）；② 加设置按钮（清除缓存：一键 + 指定专辑；检测更新、更新、**不要弹窗**；关于 + GitHub 链接）。
+
+- [x] **S0 设置按钮放哪**（用户直接问的）：放**搜索页搜索栏最右边**（Search 按钮右边）。理由：应用没有 AppBar/抽屉，
+  搜索页是根页面、专辑页是全屏详情，搜索栏是唯一常驻 chrome；齿轮是那一行的最后一站，遥控器一直按右就到。
+  有更新时齿轮上出现小红点（不再有横幅）。
+- [x] **S1 更新搬进设置、彻底去弹窗**：删掉 `lib/ui/shared/update_banner.dart` 与 `app.dart` 里的挂载点
+  （连带 `tv_focus_test.dart` 的两条横幅用例和它的 fake）。启动仍静默检查一次；`UpdateController.check()` 现在会
+  记录 `hasChecked`/`checkError`（以前失败是静默吞掉的），设置页里原地显示：正在检查 / 已是最新 / 新版本 + 下载百分比进度条
+  / 安装 / 重启并更新（终于用上了原本没有调用者的 `restartAndUpdate()`）/ 失败 + 重试。
+  Android 的系统安装界面去不掉（那是系统 UI），其余全无对话框。
+- [x] **S2 缓存管理**：`AudioCacheManager` 新增 `listCachedAlbums()`（列目录、读 manifest、算体积与文件数）、
+  `deleteCachedAlbum(path)`（按目录删，且拒绝 root 之外的路径）、`readManifestSync`；`CachedAlbum` 模型。
+  新增设置页 `缓存` 子页：位置（公开 Music 还是私有）、总占用、**一键清除全部**（含 HTML 页缓存）、
+  每张专辑单独删除。`HttpCache` 提成 `httpCacheProvider` 以便清理。
+- [x] **S3 关于**：版本号（`appVersionProvider`）+ GitHub 仓库链接（`url_launcher`）。
+- [x] **S4 局域网发现**：`lib/data/lan/lan_device.dart` + `lan_service.dart`（纯 `dart:io`，零新依赖）——
+  UDP 广播 probe/pong/bye、20 秒过期、手填 IP 单播、每视图 `MethodChannel` 无关的 HTTP 接口 `GET/POST /kh/favorites`、
+  `x-khinsider` 头校验、设备 id 随机持久化、设备名默认取主机名或「安卓设备 xxxx」。
+- [x] **S5 收藏双向同步**：`FavoritesController.mergeAll()`（并集、只增不删、新在前；state 未加载时从磁盘读，避免覆盖）；
+  `LanController` 持有服务与状态（开关、设备列表、忙碌、状态行），`LanScreen`：本机信息、设备列表（展开后
+  发送/拉取/移除手动地址）、手动添加、合并安全的说明文字。全部原地显示，无对话框。
+- [x] **S6 平台配置**：Android `network_security_config` 打开 `base-config` cleartext（LAN 对端 IP 无法枚举）；
+  iOS 加 `NSLocalNetworkUsageDescription`。macOS 的 `network.client/server` 权限本来就有。
+- [x] **S7 测试**：`settings_test.dart`（6 条：更新四种状态 + 缓存列表/单删/清除）、`cache_api_test.dart`（7 条，真实临时目录）、
+  `lan_test.dart`（8 条：双向同步端到端、回调、403、连不上、包解析、id 格式、并集合并两种情形）、
+  `tv_search_test.dart` 增加「搜索栏有设置入口」。全套 **136 个测试通过**。
+  坑：widget test 里真实异步 IO 不会推进（FakeAsync），缓存/页缓存的 widget 测试要用 fake 管理器，
+  纯行为测试放到 `test(...)` 里用真实临时目录。
+- [ ] **S8 同步播放 / 组环绕声**（用户需求 ② 的后半）——下一轮做：主机把播放状态（曲目、位置、播放/暂停、跳转）
+  通过 WebSocket 推给跟随设备，跟随端按 RTT 补偿起播，并提供每设备延迟微调（毫秒）用于多音箱对齐。
+

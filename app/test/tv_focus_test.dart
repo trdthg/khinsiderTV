@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:khinsider/core/platform/device.dart';
-import 'package:khinsider/core/widgets/dpad_tile.dart';
-import 'package:khinsider/data/update_service.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
-import 'package:khinsider/state/update_controller.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
 import 'package:khinsider/ui/now_playing/now_playing_art.dart';
 import 'package:khinsider/ui/search/search_screen.dart';
-import 'package:khinsider/ui/shared/update_banner.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart'
@@ -176,114 +171,6 @@ void main() {
     },
   );
 
-  testWidgets('the update banner can be reached and walked with the D-pad', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          updateControllerProvider.overrideWith(FakeUpdateController.new),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                const UpdateBanner(),
-                Expanded(
-                  child: Center(
-                    child: DpadTile(
-                      focusNode: FocusNode(debugLabel: 'content'),
-                      onSelect: () {},
-                      child: const Text('content'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    // Focus the screen's own content, then walk up into the banner: its
-    // buttons have to be reachable and visibly ringed.
-    await tester.tap(find.text('content'));
-    await tester.pump();
-    await press(tester, LogicalKeyboardKey.arrowUp);
-    expect(
-      focusedLabel(),
-      startsWith('update-'),
-      reason: 'Up from the content must reach the update banner',
-    );
-
-    // Left/Right walk the banner's own buttons instead of Flutter's guesswork.
-    final labels = <String?>{focusedLabel()};
-    for (var i = 0; i < 4; i++) {
-      await press(tester, LogicalKeyboardKey.arrowRight);
-      labels.add(focusedLabel());
-    }
-    expect(
-      labels,
-      containsAll(<String>['update-action', 'update-view', 'update-close']),
-    );
-  });
-  testWidgets('on a TV the update banner takes the remote and gives it back', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          updateControllerProvider.overrideWith(FakeUpdateController.new),
-          isTelevisionProvider.overrideWithValue(true),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                const UpdateBanner(),
-                Expanded(
-                  child: Center(
-                    child: DpadTile(
-                      focusNode: FocusNode(debugLabel: 'content'),
-                      onSelect: () {},
-                      child: const Text('content'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    // Nothing can walk into the banner on a real screen (the app navigates by
-    // region, not by geometry), so the banner takes the remote itself.
-    expect(
-      focusedLabel(),
-      'update-action',
-      reason: 'the update button must be selected without hunting for it',
-    );
-
-    // Select actually activates it: the fake moves the phase to downloading.
-    await press(tester, LogicalKeyboardKey.select);
-    await tester.pump();
-    expect(find.text('50%'), findsOneWidget);
-    expect(
-      focusedLabel(),
-      'update-action',
-      reason: 'the ring must survive the phase change',
-    );
-
-    // Down hands the remote back to the content below.
-    await press(tester, LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    expect(focusedLabel(), 'content');
-  });
-
   testWidgets('the remote back in zen mode exits zen and keeps the album', (
     tester,
   ) async {
@@ -309,25 +196,4 @@ void main() {
     // ...and the focus comes back onto the track that was playing.
     expect(focusedLabel(), 'row-0');
   });
-}
-
-/// A banner that never talks to the network or the platform.
-class FakeUpdateController extends UpdateController {
-  @override
-  UpdateState build() => const UpdateState(
-    available: UpdateInfo(version: '9.9.9', url: 'https://example.com/none'),
-  );
-
-  @override
-  Future<void> dismiss() async {
-    state = state.copyWith(dismissed: true);
-  }
-
-  @override
-  Future<void> download() async {
-    state = state.copyWith(
-      downloadPhase: UpdateDownloadPhase.downloading,
-      downloadProgress: 0.5,
-    );
-  }
 }

@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- LAN sync: finds other devices running this app on the same WiFi. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在同一 WiFi 下发现你的其它设备，在设备之间同步收藏和一起播放。</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

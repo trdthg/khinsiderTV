@@ -32,6 +32,35 @@ class FavoritesController extends AsyncNotifier<List<AlbumSummary>> {
   bool isFavorite(String albumId) =>
       state.value?.any((a) => a.id == albumId) ?? false;
 
+  /// Union-merge [incoming] into the favorites, newest first, and report how
+  /// many were new. Used by the LAN sync, which must never drop local entries:
+  /// the merge only ever adds.
+  ///
+  /// Reads the persisted list when the provider has not loaded yet — the sync
+  /// can arrive before the first screen ever watched favorites, and writing
+  /// `state.value` (null) would replace the stored list with just the incoming
+  /// ones.
+  Future<int> mergeAll(Iterable<AlbumSummary> incoming) async {
+    final store = await ref.read(jsonKvStoreProvider.future);
+    final current =
+        state.value ??
+        store
+            .readList<Object?>(_kFavorites)
+            .map(tryAlbumSummaryFromJson)
+            .whereType<AlbumSummary>()
+            .toList();
+    final known = current.map((a) => a.id).toSet();
+    final fresh = incoming.where((a) => known.add(a.id)).toList();
+    if (fresh.isEmpty) {
+      state = AsyncData(current);
+      return 0;
+    }
+    final merged = [...fresh, ...current];
+    store.write(_kFavorites, merged.map(albumSummaryToJson).toList());
+    state = AsyncData(merged);
+    return fresh.length;
+  }
+
   Future<void> toggle(AlbumSummary album) async {
     final store = await ref.read(jsonKvStoreProvider.future);
     final current = [...?state.value];

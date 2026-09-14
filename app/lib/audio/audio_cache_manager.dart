@@ -74,6 +74,9 @@ class AudioCacheManager {
   static const String imageFolder = 'image';
   static const String otherFolder = 'other';
 
+  /// Manifest written into [otherFolder] by [saveAlbumManifest].
+  static const String manifestFileName = 'album.json';
+
   static const List<String> categoryFolders = [
     mp3Folder,
     flacFolder,
@@ -526,6 +529,96 @@ class AudioCacheManager {
     return total;
   }
 
+  /// Every album folder on disk, biggest first.
+  ///
+  /// There is no index of cached albums — the only per-album metadata is the
+  /// `album.json` inside each folder — so this walks the direct children of the
+  /// cache root, which are exactly the album folders.
+  Future<List<CachedAlbum>> listCachedAlbums() async {
+    final rootDir = await root();
+    if (!rootDir.existsSync()) return const [];
+    final albums = <CachedAlbum>[];
+    await for (final entry in rootDir.list(
+      recursive: false,
+      followLinks: false,
+    )) {
+      if (entry is! Directory) continue;
+      albums.add(await _describeCachedAlbum(entry));
+    }
+    albums.sort((a, b) {
+      final bySize = b.bytes.compareTo(a.bytes);
+      if (bySize != 0) return bySize;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return albums;
+  }
+
+  Future<CachedAlbum> _describeCachedAlbum(Directory dir) async {
+    var bytes = 0;
+    var tracks = 0;
+    var downloading = false;
+    var hasCover = false;
+    try {
+      await for (final entry in dir.list(recursive: true, followLinks: false)) {
+        if (entry is! File) continue;
+        final name = entry.path.split(_sep).last;
+        try {
+          bytes += await entry.length();
+        } catch (_) {}
+        if (name.endsWith('.part')) downloading = true;
+        // just_audio leaves a `.mime` sidecar next to every finished track.
+        if (name.endsWith('.mime') || name == manifestFileName) continue;
+        final parent = entry.parent.path.split(_sep).last;
+        if (parent == imageFolder) {
+          if (name.startsWith('cover')) hasCover = true;
+          continue;
+        }
+        tracks++;
+      }
+    } catch (_) {}
+    final manifest = readManifestSync(dir);
+    return CachedAlbum(
+      id: manifest?['id'] is String ? manifest!['id'] as String : '',
+      title: manifest?['title'] is String
+          ? manifest!['title'] as String
+          : dir.path.split(_sep).last,
+      path: dir.path,
+      bytes: bytes,
+      tracks: tracks,
+      downloading: downloading,
+      hasCover: hasCover,
+    );
+  }
+
+  /// The parsed `album.json` of one album folder, if it has one.
+  Map<String, Object?>? readManifestSync(Directory dir) {
+    final file = File('${dir.path}$_sep$otherFolder$_sep$manifestFileName');
+    if (!file.existsSync()) return null;
+    try {
+      final decoded = jsonDecode(file.readAsStringSync());
+      return decoded is Map ? Map<String, Object?>.from(decoded) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Delete one cached album by folder path.
+  ///
+  /// [deleteAlbum] needs the exact id *and* title and silently does nothing
+  /// when the folder was named by an older version; the Settings screen only
+  /// has the path it just listed, so this takes that instead. Paths outside the
+  /// cache root are ignored.
+  Future<void> deleteCachedAlbum(String path) async {
+    final rootDir = await root();
+    final normalised = Directory(path).path;
+    if (!normalised.startsWith(rootDir.path)) return;
+    _albumDirs.removeWhere((_, dir) => dir.path == normalised);
+    final dir = Directory(normalised);
+    if (dir.existsSync()) {
+      await dir.delete(recursive: true);
+    }
+  }
+
   /// Remove one album folder (the user can of course also just delete it).
   Future<void> deleteAlbum(String albumId, String albumTitle) async {
     final dir = locateAlbumDirSync(albumId, albumTitle);
@@ -556,6 +649,39 @@ class AudioCacheManager {
 
   static String _shortHash(String id) =>
       sha1.convert(utf8.encode(id)).toString().substring(0, 8);
+}
+
+/// One album folder under the cache root, as listed by
+/// [AudioCacheManager.listCachedAlbums].
+class CachedAlbum {
+  const CachedAlbum({
+    required this.id,
+    required this.title,
+    required this.path,
+    required this.bytes,
+    required this.tracks,
+    this.downloading = false,
+    this.hasCover = false,
+  });
+
+  /// Album id from `album.json`; empty when the folder has no manifest.
+  final String id;
+  final String title;
+
+  /// Folder path — what [AudioCacheManager.deleteCachedAlbum] takes.
+  final String path;
+
+  /// Bytes of everything in the folder, including `.mime` sidecars and any
+  /// in-flight `.part` file (so the number moves while a download runs).
+  final int bytes;
+
+  /// Files that look like tracks (`mp3/`, `flac/`, `other/` minus the
+  /// manifest and the `.mime` sidecars).
+  final int tracks;
+
+  /// A `.part` file is present: a track is still downloading.
+  final bool downloading;
+  final bool hasCover;
 }
 
 /// Identifies a track for a cache lookup: enough to rebuild the on-disk file

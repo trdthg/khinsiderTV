@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- The just_audio proxy serves every track over http://127.0.0.1. -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>
+    <!-- LAN sync talks plain HTTP to other devices on the local network. Their
+         addresses are whatever the router handed out, so they cannot be listed
+         here; the API is a union-merge of favorites and nothing else (see
+         lib/data/lan/lan_service.dart). The app's own traffic to the internet
+         is HTTPS either way. -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

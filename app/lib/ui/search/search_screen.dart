@@ -8,6 +8,8 @@ import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/search_controller.dart';
+import '../../state/update_controller.dart';
+import '../settings/settings_screen.dart';
 import 'tv_system_text_field.dart';
 
 /// Search screen: text field + responsive album grid (list on narrow /
@@ -38,6 +40,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   /// The Search button, used as the anchor for "leave the field downwards".
   final _searchButtonFocus = FocusNode(debugLabel: 'search-button');
+
+  /// Settings: the last stop on the search bar's row.
+  final _settingsFocus = FocusNode(debugLabel: 'settings-button');
   final FocusNode _nativeFieldAnchor = FocusNode(
     debugLabel: 'search-field-native',
   );
@@ -56,6 +61,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _controller.dispose();
     _searchFocus.dispose();
     _searchButtonFocus.dispose();
+    _settingsFocus.dispose();
     _nativeFieldAnchor.dispose();
     super.dispose();
   }
@@ -170,6 +176,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             filled: true,
             icon: Icons.arrow_forward,
             onPressed: _submit,
+          ),
+          const SizedBox(width: 8),
+          _SettingsButton(
+            focusNode: _settingsFocus,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
+            hasUpdate: ref.watch(
+              updateControllerProvider.select((s) => s.updateReady),
+            ),
           ),
         ],
       ),
@@ -563,6 +579,60 @@ class _Message extends StatelessWidget {
           const SizedBox(height: 12),
           Text(text, textAlign: TextAlign.center),
         ],
+      ),
+    );
+  }
+}
+
+/// The settings entry point.
+///
+/// The search bar is the app's only permanent chrome (the album page is a
+/// full-screen detail view), so this is the one place Settings can be without
+/// first opening an album. The dot is the entire "an update is available"
+/// signal now that the app no longer pops a banner up at launch.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({
+    required this.focusNode,
+    required this.onPressed,
+    required this.hasUpdate,
+  });
+
+  final FocusNode focusNode;
+  final VoidCallback onPressed;
+  final bool hasUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DpadTile(
+      focusNode: focusNode,
+      borderRadius: 24,
+      onSelect: onPressed,
+      child: Tooltip(
+        message: hasUpdate ? '设置（有可用更新）' : '设置',
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Icon(Icons.settings_outlined),
+              if (hasUpdate)
+                Positioned(
+                  top: 9,
+                  right: 9,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: scheme.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
