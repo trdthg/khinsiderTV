@@ -246,9 +246,16 @@ class UpdateService {
   );
 
   /// Ask the Android host to open the system package installer for [path].
-  Future<void> installApk(String path) async {
+  ///
+  /// [forceIntent] skips the PackageInstaller session and uses the plain
+  /// content:// hand-off instead: a different mechanism, offered for the
+  /// devices where a session keeps coming back as "install cancelled".
+  Future<void> installApk(String path, {bool forceIntent = false}) async {
     if (!Platform.isAndroid) return;
-    await _updateChannel.invokeMethod<void>('installApk', {'path': path});
+    await _updateChannel.invokeMethod<void>('installApk', {
+      'path': path,
+      'forceIntent': forceIntent,
+    });
   }
 
   /// Whether the OS will let this app hand an APK to its installer. Android 8+

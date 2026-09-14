@@ -936,3 +936,36 @@
 - [x] 进设置页之前先 `blur()` 原生框 + `unfocus()` 当前焦点，免得搜索页留下的键盘跟过去。
 - [x] 新增测试：手机布局下搜索框 `autofocus` 为 false、且当前焦点不是 `EditableText`。
 
+## Z. 未发布（v0.3.2）：pong 从未被处理 + 安装会话失败后的第二条路
+
+用户反馈：① 安卓上还是「安装被取消」；② 同步时提示「连不上对方的服务端口」。
+
+### Z1 同步：`pong` 包被解析、被回答，然后被丢掉
+
+协议里 `probe` 是「谁在线」，`pong` 是「这是我要约的地址和端口」。发送侧一直是对的
+（`beaconPayload('pong')` 有测试覆盖它的字段），但**接收侧只处理 `bye` 和 `probe`** —— `pong`
+落到 `if (message['kh'] != 'probe') continue;` 直接被丢掉了。后果：
+
+- `_probeHost()` 等的就是 `deviceStream` 里出现那个 host，而它只在收到 `probe` 时才触发 ——
+  所以「手动填地址」基本永远超时（`没有回应`），除非对方恰好在那一刻广播。
+- `_request()` 失败后的自愈重试（`_refreshPeer` → `_probeHost`）**从来没有成功过**，于是那条
+  「对方在广播里能被看到，但连不上它的服务端口」的文案**无论真实原因是什么都会出现** ——
+  用户看到的正是这句。
+
+- [x] `_handleDatagram` 处理 `pong`（当成一次 sighting upsert，且**不回 pong**，否则两端会互刷）。
+- [x] 失败文案按异常类型给方向：`refused`（端口上没有服务，对方可能刚重启，端口是每次启动重分配的）
+      与 `timed out`（对方防火墙 / 路由器客户端隔离 —— UDP 广播能通、TCP 不通就是这个特征）。
+- [x] 新增测试：伪造的 peer 只发一个 `pong` 就能被服务学到（修复前这条测试必失败）。
+
+### Z2 安装：会话路线之外留一条老路
+
+上一轮修的是「确认框不弹」（`EXTRA_INTENT` 在 Android 12+ 是 `PendingIntent`），但用户设备上仍然是
+「安装被取消」。协议侧只能再补两件事：
+
+- [x] `launchInstallConfirmation` 也接受 `IntentSender`（个别 ROM 给的是裸 sender）。
+- [x] `installApk` 新增 `forceIntent`：跳过 PackageInstaller 会话，直接走 content:// + ACTION_VIEW
+      那条独立的老路；设置页在**安装真的失败之后**才多出一行「改用系统安装器」（`installFailed` 标志，
+      正常流程/等待确认时不出现）。
+- [x] 顺带说明：从 v0.3.0 及更早版本点「更新」必然还是「安装被取消」—— 装的是旧逻辑，
+      修不了自己，必须先手动装一次。
+

@@ -220,6 +220,18 @@ class SettingsScreen extends ConsumerWidget {
             danger: update.installError != null,
             onSelect: notifier.revealDownload,
           ),
+          // The session API is the better mechanism, but a device can refuse
+          // it in ways it never explains (a TV that aborts the confirmation).
+          // This is the older content:// hand-off: the same APK, a different
+          // door, offered only after something actually failed.
+          if (update.installFailed) ...[
+            SettingsRow(
+              icon: Icons.open_in_new,
+              title: '改用系统安装器',
+              subtitle: '换一种方式把安装包交给系统（安装会话一直失败时用它）',
+              onSelect: () => notifier.installDownloaded(forceIntent: true),
+            ),
+          ],
           // Android 8+ wants "install unknown apps" granted to this app on top
           // of REQUEST_INSTALL_PACKAGES; without it the installer opens and
           // does nothing, so offer the one screen that fixes it.

@@ -362,6 +362,21 @@ class LanService {
         if (id is String && _devices.remove(id) != null) _emit();
         continue;
       }
+      if (message['kh'] == 'pong') {
+        // The answer to a unicast probe, and the only way a peer that is not
+        // broadcasting can be learned at all: the manual address box, the
+        // saved addresses at start-up, and the retry after a failed connection
+        // all depend on it. Dropping it silently made every one of those paths
+        // give up with "the peer answers broadcasts but its service port does
+        // not answer" - a message that was then always wrong about the cause.
+        // A pong is never answered with a pong: that would not terminate.
+        final peer = LanDevice.tryFromJson(
+          message,
+          host: datagram.address.address,
+        );
+        if (peer != null) _upsert(peer);
+        continue;
+      }
       if (message['kh'] != 'probe') continue;
       final from = message['id'];
       if (from is String && from == deviceId) continue; // our own beacon
@@ -547,6 +562,24 @@ class LanService {
   /// packet to wake up. So a failed connection is followed by a unicast probe
   /// to the same address, which both refreshes the advertised port and gives a
   /// sleeping peer a reason to wake, and then the request is tried again.
+  /// Says which of the two failures this is, because their fixes have nothing
+  /// in common: an unreachable port is a firewall, a refused one is a peer
+  /// whose service is not there any more.
+  String _explain(Object error) {
+    final text = error is SocketException
+        ? '${error.osError?.message ?? ''} ${error.message}'.toLowerCase()
+        : '$error'.toLowerCase();
+    if (text.contains('refused')) {
+      return '\n对方的端口拒绝连接：那个端口上没有服务在听（应用每次启动都会重新'
+          '分配端口，对方可能刚重启过）。';
+    }
+    if (text.contains('timed out') || text.contains('timeout')) {
+      return '\n对方没有回应 TCP：典型原因是对方的防火墙，或者路由器的"客户端'
+          '隔离"（AP 隔离）—— UDP 广播能通、TCP 连不上就是这个特征。';
+    }
+    return '';
+  }
+
   Future<JsonMap> _request(
     LanDevice peer,
     String method,
@@ -563,15 +596,16 @@ class LanService {
       if (fresh == null) {
         throw LanException(
           '连不上 ${peer.name}（${peer.host}:${peer.port}）：$first\n'
-          '对方在广播里能被看到，但连不上它的服务端口：请确认两台设备在同一个'
-          '网络里，且对方的应用没有被系统休眠。',
+          '它在广播里能看到，但连它的服务端口没有回应。'
+          '${_explain(first)}',
         );
       }
       try {
         return await _requestOnce(fresh, method, path, payload: payload);
       } catch (second) {
         throw LanException(
-          '连不上 ${peer.name}（${fresh.host}:${fresh.port}）：$second',
+          '连不上 ${peer.name}（${fresh.host}:${fresh.port}）：$second'
+          '${_explain(second)}',
         );
       }
     }

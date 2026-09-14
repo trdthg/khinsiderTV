@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -424,5 +425,50 @@ void main() {
           .toList();
       expect(ids, containsAll(<String>['kept', 'new']));
     });
+  });
+
+  test('a pong alone teaches the service about a peer', () async {
+    // The answer to a unicast probe. It used to be parsed, answered and then
+    // dropped: the manual address box, the saved addresses and the retry after
+    // a failed connection all waited for a `probe` that never came.
+    final service = LanService(
+      deviceId: 'aaaaaaaa',
+      deviceName: 'Device A',
+      appVersion: '0.3.1',
+      discoveryPort: 41259,
+      readFavorites: () async => const [],
+      mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
+    );
+    await service.start();
+    final fake = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async {
+      await service.stop();
+      fake.close();
+    });
+
+    final appeared = service.deviceStream
+        .firstWhere((devices) => devices.any((d) => d.id == 'peer-1'))
+        .timeout(const Duration(seconds: 3));
+    fake.send(
+      utf8.encode(
+        jsonEncode({
+          'kh': 'pong',
+          'id': 'peer-1',
+          'name': 'Peer',
+          'v': '0.3.1',
+          'port': 45678,
+          'fav': 3,
+        }),
+      ),
+      InternetAddress.loopbackIPv4,
+      service.discoveryPort,
+    );
+
+    await appeared;
+    final peer = service.devices.singleWhere((d) => d.id == 'peer-1');
+    expect(peer.host, '127.0.0.1');
+    expect(peer.port, 45678);
+    expect(peer.favorites, 3);
   });
 }

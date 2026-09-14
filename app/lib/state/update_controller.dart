@@ -157,7 +157,7 @@ class UpdateController extends Notifier<UpdateState> {
   /// (`REQUEST_INSTALL_PACKAGES`). Without that grant the installer opens and
   /// does nothing at all, which is exactly the "it just fails" report this
   /// exists to explain.
-  Future<void> installDownloaded() async {
+  Future<void> installDownloaded({bool forceIntent = false}) async {
     final path = state.downloadedFile;
     if (path == null) return;
     final service = ref.read(updateServiceProvider);
@@ -166,15 +166,16 @@ class UpdateController extends Notifier<UpdateState> {
       state = state.copyWith(
         installError: '系统还没有允许本应用安装应用，请先打开这个开关',
         installNeedsPermission: true,
+        installFailed: false,
       );
       return;
     }
     state = state.copyWith(installError: null, installNeedsPermission: false);
     try {
-      await service.installApk(path);
+      await service.installApk(path, forceIntent: forceIntent);
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(installError: '打开安装界面失败：$e');
+      state = state.copyWith(installError: '打开安装界面失败：$e', installFailed: true);
     }
   }
 
@@ -184,19 +185,25 @@ class UpdateController extends Notifier<UpdateState> {
   void _onInstallResult(InstallResult result) {
     if (!ref.mounted) return;
     if (result.succeeded) {
-      state = state.copyWith(installError: null, installNeedsPermission: false);
+      state = state.copyWith(
+        installError: null,
+        installNeedsPermission: false,
+        installFailed: false,
+      );
       return;
     }
     if (result.pendingUserAction) {
       state = state.copyWith(
         installError: '已交给系统安装器，请在系统界面上确认',
         installNeedsPermission: false,
+        installFailed: false,
       );
       return;
     }
     state = state.copyWith(
       installError: result.explanation,
       installNeedsPermission: result.blocked,
+      installFailed: true,
     );
   }
 
@@ -235,6 +242,7 @@ class UpdateState {
     this.errorMessage,
     this.installError,
     this.installNeedsPermission = false,
+    this.installFailed = false,
   });
 
   /// Non-null when a newer release exists.
@@ -267,6 +275,10 @@ class UpdateState {
   /// one-tap fix ([UpdateController.openInstallSettings]).
   final bool installNeedsPermission;
 
+  /// True when [installError] is a refusal: only then does the alternative
+  /// installer get offered.
+  final bool installFailed;
+
   /// Whether there is an update the user should be told about (the dot on the
   /// settings button).
   bool get updateReady => available != null;
@@ -287,6 +299,7 @@ class UpdateState {
     Object? errorMessage = _unset,
     Object? installError = _unset,
     bool? installNeedsPermission,
+    bool? installFailed,
   }) => UpdateState(
     available: identical(available, _unset)
         ? this.available
@@ -312,6 +325,7 @@ class UpdateState {
         : installError as String?,
     installNeedsPermission:
         installNeedsPermission ?? this.installNeedsPermission,
+    installFailed: installFailed ?? this.installFailed,
   );
 }
 

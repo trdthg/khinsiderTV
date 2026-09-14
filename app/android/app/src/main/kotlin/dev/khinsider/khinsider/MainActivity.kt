@@ -75,11 +75,17 @@ class MainActivity : AudioServiceActivity() {
                         result.error("missing_file", "APK is gone: $path", null)
                         return@setMethodCallHandler
                     }
+                    // The user can ask for the other mechanism after a session
+                    // failed on their device: the plain content:// hand-off
+                    // below is older but independent of the session API.
+                    val forceIntent = call.argument<Boolean>("forceIntent") ?: false
                     // Preferred: hand the bytes to the system installer through a
                     // session. It needs no content:// URI, so nothing can fail
                     // because the installer could not read our file, and the
                     // result comes back as a status code we can show the user.
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    if (!forceIntent &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                    ) {
                         try {
                             startInstallSession(file)
                             result.success("session")
@@ -445,6 +451,13 @@ class MainActivity : AudioServiceActivity() {
         return runCatching {
             when (extra) {
                 is PendingIntent -> extra.send()
+                is android.content.IntentSender -> {
+                    // Some builds hand the confirmation over as a bare sender.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+                        return false
+                    }
+                    extra.sendIntent(this@MainActivity, 0, null, null, null)
+                }
                 is Intent -> {
                     extra.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(extra)
