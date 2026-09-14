@@ -125,6 +125,12 @@ class TvTextFieldView(
                     channel.invokeMethod("onMoveUp", null)
                     true
                 }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    // "I want to type": the field is focused silently on
+                    // purpose, so OK is what brings the platform keyboard up.
+                    showIme()
+                    false
+                }
                 else -> false
             }
         }
@@ -142,8 +148,12 @@ class TvTextFieldView(
                     result.success(null)
                 }
                 "focus" -> {
+                    // The host decides whether the keyboard comes with the
+                    // focus: the initial focus must not raise it, or it covers
+                    // the screen the moment the search box appears.
+                    val showKeyboard = call.arguments as? Boolean ?: true
                     editText.requestFocus()
-                    showIme()
+                    if (showKeyboard) showIme()
                     result.success(null)
                 }
                 "blur" -> {
@@ -155,10 +165,9 @@ class TvTextFieldView(
             }
         }
 
-        // Focusing on creation is what raises the platform keyboard, exactly
-        // like a native TV app does when its search box opens.
-        editText.requestFocus()
-        editText.post { showIme() }
+        // No focus and no keyboard here: a screen that wants the field focused
+        // says so through "autoFocus" (focus only), and the keyboard comes up
+        // when the user actually means to type - OK on the remote, or a tap.
     }
 
     private fun showIme() {

@@ -101,6 +101,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// right above the on-screen keyboard, with the results stacked upwards.
   bool get _narrow => MediaQuery.sizeOf(context).width <= 700;
 
+  /// False until the remote/pointer has left the TV field once. The first
+  /// focus is the one the screen sets up itself, and that one is silent.
+  bool _leftFieldOnce = false;
+
+  /// Opens Settings, dropping the keyboard first.
+  ///
+  /// The search field keeps the platform keyboard up otherwise, and the
+  /// settings page has no field of its own to explain why it is there.
+  void _openSettings() {
+    _systemFieldKey.currentState?.blur();
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+  }
+
   void _submit([String? preset]) {
     if (preset != null) _controller.text = preset;
     ref.read(searchControllerProvider.notifier).search(_controller.text);
@@ -134,8 +150,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     onFocusChange: (hasFocus) {
                       final state = _systemFieldKey.currentState;
                       if (hasFocus) {
-                        state?.requestFocus();
+                        // The start-up focus stays silent: raising the
+                        // platform keyboard here would cover the screen before
+                        // the user asked for anything. Coming back to the
+                        // field later is a deliberate move, so that one gets
+                        // the keyboard.
+                        state?.requestFocus(showKeyboard: _leftFieldOnce);
                       } else {
+                        _leftFieldOnce = true;
                         state?.blur();
                       }
                     },
@@ -159,7 +181,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   )
                 : TextField(
-                    autofocus: true,
+                    // Deliberately not autofocused: an autofocused field pops
+                    // the on-screen keyboard the moment the app opens. Tapping
+                    // it (or navigating up to it) is enough.
+                    autofocus: false,
                     focusNode: _searchFocus,
                     controller: _controller,
                     textInputAction: TextInputAction.search,
@@ -181,9 +206,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           const SizedBox(width: 8),
           _SettingsButton(
             focusNode: _settingsFocus,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed: _openSettings,
             hasUpdate: ref.watch(
               updateControllerProvider.select((s) => s.updateReady),
             ),

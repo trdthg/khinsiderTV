@@ -353,6 +353,9 @@ class _LanScreenState extends ConsumerState<LanScreen> {
       controller: _host,
       hintText: '192.168.1.23',
       height: 46,
+      // Reachable with the remote, but opening this page must not raise the
+      // platform keyboard on its own (OK in the field does that).
+      autoFocus: true,
       onSubmitted: (_) => _addHost(),
       // Down is the natural "done, go on": leave the field and add the address.
       onMoveDown: _addHost,

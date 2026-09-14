@@ -29,6 +29,7 @@ class TvSystemTextField extends StatefulWidget {
     required this.onSubmitted,
     required this.onMoveDown,
     required this.onMoveUp,
+    this.autoFocus = false,
     this.height = 48,
   });
 
@@ -40,6 +41,11 @@ class TvSystemTextField extends StatefulWidget {
   /// host screen has to move it.
   final VoidCallback onMoveDown;
   final VoidCallback onMoveUp;
+
+  /// Take the focus as soon as the native view exists, *without* raising the
+  /// keyboard. A platform view is not a Flutter focus target, so a field that
+  /// never takes focus on its own cannot be reached with a remote at all.
+  final bool autoFocus;
 
   final double height;
 
@@ -121,11 +127,19 @@ class TvSystemTextFieldState extends State<TvSystemTextField> {
     });
     _nativeText = widget.controller.text;
     _pushText();
+    if (widget.autoFocus) requestFocus(showKeyboard: false);
   }
 
-  /// Brings the platform keyboard back after it was dismissed.
-  void requestFocus() {
-    unawaited(_channel?.invokeMethod<void>('focus') ?? Future<void>.value());
+  /// Focuses the native field, and by default raises the platform keyboard.
+  ///
+  /// Pass `showKeyboard: false` for the focus the screen sets up by itself:
+  /// on a TV that keyboard covers the whole screen, and the user has not asked
+  /// to type anything yet.
+  void requestFocus({bool showKeyboard = true}) {
+    unawaited(
+      _channel?.invokeMethod<void>('focus', showKeyboard) ??
+          Future<void>.value(),
+    );
   }
 
   /// Drops the keyboard and the focus (after a search: the results are next).

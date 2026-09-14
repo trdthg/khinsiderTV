@@ -41,4 +41,31 @@ void main() {
     expect(field.focusNode?.hasFocus, isFalse);
     expect(FocusManager.instance.primaryFocus, isNotNull);
   });
+
+  testWidgets('the field does not take focus, so no keyboard, on open', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          kh.searchControllerProvider.overrideWith(SeededSearchController.new),
+        ],
+        child: const MaterialApp(home: SearchScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.autofocus, isFalse);
+    expect(
+      field.focusNode?.hasFocus,
+      isFalse,
+      reason: 'a focused field raises the on-screen keyboard on launch',
+    );
+    expect(
+      FocusManager.instance.primaryFocus?.context?.widget,
+      isNot(isA<EditableText>()),
+    );
+  });
 }
