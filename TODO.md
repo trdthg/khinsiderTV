@@ -873,11 +873,17 @@
 
 - [x] 新增测试：1280×800 + `isTelevision: true` + `isAndroid: true` 时 `Export to Music` 按钮存在。
 
-### 没有做的事（需要用户确认）
+### TV 上那个「下载」按钮到底是什么
 
-「下载」目前是把**已缓存**（播放过）的曲目导出到 `Music/KHInsider`；应用本身只在播放时边播边下。
-真正的「一键下载整张专辑（不用播放）」是新功能：每首都要先解析直链，而 KHInsider 不能猛刷，
-所以要有限速 + 进度界面 + 取消。等用户决定要不要做。
+把**已缓存（播放过）**的曲目导出到 `Music/KHInsider`，应用本身只在播放时边播边下（一首预取）。
+这里**没有**、也**永远不会有**「一键下载整张专辑」：
+
+> There is no "download this album" button on purpose: khinsider is effectively a public-service
+> site, and I do not want to hammer its servers... Please respect the site itself too. — README
+
+用户原话：**「我在 readme 里面也说过永远不要做这个功能」**。这是硬性约束，不是「待用户确认」的候选功能：
+以后任何人（包括 AI）都不许再把批量下载当成一个"要不要做"的问题提出来。真正的修复只是把已有的
+导出按钮在 TV 布局里显示出来，不涉及任何新的下载行为。
 
 ## X. 未发布：安装 session 的确认框 + 横向行两端越界
 
