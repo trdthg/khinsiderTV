@@ -21,6 +21,7 @@ class LanSyncResult {
     required this.added,
     required this.total,
     required this.incoming,
+    this.replaced = false,
   });
 
   /// Name of the other device.
@@ -34,6 +35,12 @@ class LanSyncResult {
 
   /// True when this device was the receiver (the other one pushed).
   final bool incoming;
+
+  /// True when the receiving side was overwritten instead of merged.
+  final bool replaced;
+
+  /// True when the receiving side emptied out everything the sender lacked.
+  int get removed => replaced ? total - added : 0;
 }
 
 typedef JsonMap = Map<String, Object?>;
@@ -50,8 +57,9 @@ typedef JsonMap = Map<String, Object?>;
 /// device whose network filters broadcasts can still be added by address.
 ///
 /// Security: discovery and the favorites API are unauthenticated, on the
-/// assumption that this is a home LAN and that the only operation offered is a
-/// union merge, which cannot delete anything. See `doc/lan.md`.
+/// assumption that this is a home LAN. The ordinary sync only ever merges, so
+/// it cannot delete anything; the "overwrite" variants can, and are only sent
+/// after an explicit confirmation in the UI. See `doc/lan.md`.
 class LanService {
   LanService({
     required this.deviceId,
@@ -59,6 +67,7 @@ class LanService {
     required this.appVersion,
     required this.readFavorites,
     required this.mergeFavorites,
+    required this.replaceFavorites,
     this.onRemoteSync,
     this.discoveryPort = defaultDiscoveryPort,
   });
@@ -74,6 +83,12 @@ class LanService {
   /// new and how many there are now.
   final Future<({int added, int total})> Function(List<JsonMap> incoming)
   mergeFavorites;
+
+  /// Overwrite the local favorites with an incoming list (the forced sync).
+  /// Returns how many were sent and how many there are now, so the ordinary
+  /// result type can describe it too.
+  final Future<({int added, int total})> Function(List<JsonMap> incoming)
+  replaceFavorites;
 
   /// Called when another device pushes its favorites here, so the UI can say
   /// so without the receiver having to be on the LAN screen.
@@ -235,31 +250,49 @@ class LanService {
   }
 
   /// Read a peer's favorites and merge them into this device's.
-  Future<LanSyncResult> pullFavorites(LanDevice peer) async {
-    final body = await _getJson(peer, '/kh/favorites');
+  /// Reads [peer]'s favorites. With [replace] this device's own list is
+  /// overwritten rather than merged.
+  Future<LanSyncResult> pullFavorites(
+    LanDevice peer, {
+    bool replace = false,
+  }) async {
+    final body = await _request(peer, 'GET', '/kh/favorites');
     final raw = body['favorites'];
     if (raw is! List) throw const LanException('对方返回的数据无法识别');
     final incoming = raw.whereType<Map>().map(JsonMap.from).toList();
-    final outcome = await mergeFavorites(incoming);
+    final outcome = replace
+        ? await replaceFavorites(incoming)
+        : await mergeFavorites(incoming);
     return LanSyncResult(
       peer: peer.name,
       added: outcome.added,
       total: outcome.total,
       incoming: true,
+      replaced: replace,
     );
   }
 
   /// Send this device's favorites to a peer, which merges them into its own.
-  Future<LanSyncResult> pushFavorites(LanDevice peer) async {
+  /// Sends this device's favorites to [peer]. With [replace] the peer's own
+  /// list is overwritten rather than merged, which is destructive and is why
+  /// the UI asks first.
+  Future<LanSyncResult> pushFavorites(
+    LanDevice peer, {
+    bool replace = false,
+  }) async {
     final favorites = await readFavorites();
-    final body = await _postJson(peer, '/kh/favorites', {
-      'favorites': favorites,
-    });
+    final body = await _request(
+      peer,
+      'POST',
+      '/kh/favorites',
+      payload: {'favorites': favorites, 'mode': replace ? 'replace' : 'merge'},
+    );
     return LanSyncResult(
       peer: peer.name,
       added: body['added'] is int ? body['added'] as int : 0,
       total: body['total'] is int ? body['total'] as int : 0,
       incoming: false,
+      replaced: body['replaced'] == true,
     );
   }
 
@@ -418,13 +451,15 @@ class LanService {
     final response = request.response;
     try {
       if (request.headers.value('x-khinsider') != '$_protocol') {
-        response.statusCode = HttpStatus.forbidden;
+        await _writeJson(response, const {
+          'error': 'forbidden',
+        }, status: HttpStatus.forbidden);
         return;
       }
       final path = request.uri.path;
       if (request.method == 'GET' && path == '/kh/info') {
         final favorites = await readFavorites();
-        _writeJson(response, {
+        await _writeJson(response, {
           'id': deviceId,
           'name': deviceName,
           'v': appVersion,
@@ -433,34 +468,50 @@ class LanService {
         return;
       }
       if (request.method == 'GET' && path == '/kh/favorites') {
-        _writeJson(response, {'favorites': await readFavorites()});
+        await _writeJson(response, {'favorites': await readFavorites()});
         return;
       }
       if (request.method == 'POST' && path == '/kh/favorites') {
         final raw = await utf8.decoder.bind(request).join();
         final decoded = jsonDecode(raw);
         if (decoded is! Map) {
-          response.statusCode = HttpStatus.badRequest;
+          await _writeJson(response, const {
+            'error': 'bad request',
+          }, status: HttpStatus.badRequest);
           return;
         }
         final list = decoded['favorites'];
         if (list is! List) {
-          response.statusCode = HttpStatus.badRequest;
+          await _writeJson(response, const {
+            'error': 'bad request',
+          }, status: HttpStatus.badRequest);
           return;
         }
+        // Only an explicit "replace" overwrites; anything else merges, which
+        // is the safe default even if a future client forgets the field.
+        final replace = decoded['mode'] == 'replace';
         final incoming = list.whereType<Map>().map(JsonMap.from).toList();
-        final outcome = await mergeFavorites(incoming);
+        final outcome = replace
+            ? await replaceFavorites(incoming)
+            : await mergeFavorites(incoming);
         final result = LanSyncResult(
           peer: request.headers.value('x-khinsider-name') ?? '另一台设备',
           added: outcome.added,
           total: outcome.total,
           incoming: true,
+          replaced: replace,
         );
-        _writeJson(response, {'added': outcome.added, 'total': outcome.total});
+        await _writeJson(response, {
+          'added': outcome.added,
+          'total': outcome.total,
+          'replaced': replace,
+        });
         onRemoteSync?.call(result);
         return;
       }
-      response.statusCode = HttpStatus.notFound;
+      await _writeJson(response, const {
+        'error': 'not found',
+      }, status: HttpStatus.notFound);
     } catch (e) {
       try {
         response.statusCode = HttpStatus.internalServerError;
@@ -473,53 +524,77 @@ class LanService {
     }
   }
 
-  void _writeJson(HttpResponse response, Map<String, Object?> body) {
+  Future<void> _writeJson(
+    HttpResponse response,
+    Map<String, Object?> body, {
+    int status = HttpStatus.ok,
+  }) async {
+    response.statusCode = status;
     response.headers.contentType = ContentType.json;
     response.write(jsonEncode(body));
+    // Closing here matters: an unclosed response never reaches the client, and
+    // the client can only report that as a timeout ("连不上"), which is exactly
+    // the kind of guessing this app is trying not to do.
+    await response.close();
   }
 
-  Future<JsonMap> _getJson(LanDevice peer, String path) async {
-    final client = HttpClient()..connectionTimeout = _requestTimeout;
-    try {
-      final request = await client
-          .getUrl(peer.baseUri.replace(path: path))
-          .timeout(_requestTimeout);
-      request.headers.set('x-khinsider', '$_protocol');
-      request.headers.set('x-khinsider-name', deviceName);
-      final response = await request.close().timeout(_requestTimeout);
-      final body = await utf8.decoder
-          .bind(response)
-          .join()
-          .timeout(_requestTimeout);
-      if (response.statusCode != HttpStatus.ok) {
-        throw LanException('对方返回 ${response.statusCode}');
-      }
-      final decoded = jsonDecode(body);
-      if (decoded is! Map) throw const LanException('对方返回的数据无法识别');
-      return JsonMap.from(decoded);
-    } on LanException {
-      rethrow;
-    } catch (e) {
-      throw LanException('连不上 ${peer.name}：$e');
-    } finally {
-      client.close(force: true);
-    }
-  }
-
-  Future<JsonMap> _postJson(
+  /// One round trip to [peer], with one recovery attempt.
+  ///
+  /// A peer that answers the discovery broadcast but refuses the TCP
+  /// connection is the failure this feature actually hits in the field: the
+  /// address is right, but the port was learned from an older beacon, or the
+  /// device (a TV especially) dropped off the network and its radio needs a
+  /// packet to wake up. So a failed connection is followed by a unicast probe
+  /// to the same address, which both refreshes the advertised port and gives a
+  /// sleeping peer a reason to wake, and then the request is tried again.
+  Future<JsonMap> _request(
     LanDevice peer,
-    String path,
-    Map<String, Object?> payload,
-  ) async {
+    String method,
+    String path, {
+    Map<String, Object?>? payload,
+  }) async {
+    try {
+      return await _requestOnce(peer, method, path, payload: payload);
+    } on LanException {
+      // The peer answered and disliked something: the connection is fine.
+      rethrow;
+    } catch (first) {
+      final fresh = await _refreshPeer(peer);
+      if (fresh == null) {
+        throw LanException(
+          '连不上 ${peer.name}（${peer.host}:${peer.port}）：$first\n'
+          '对方在广播里能被看到，但连不上它的服务端口：请确认两台设备在同一个'
+          '网络里，且对方的应用没有被系统休眠。',
+        );
+      }
+      try {
+        return await _requestOnce(fresh, method, path, payload: payload);
+      } catch (second) {
+        throw LanException(
+          '连不上 ${peer.name}（${fresh.host}:${fresh.port}）：$second',
+        );
+      }
+    }
+  }
+
+  Future<JsonMap> _requestOnce(
+    LanDevice peer,
+    String method,
+    String path, {
+    Map<String, Object?>? payload,
+  }) async {
     final client = HttpClient()..connectionTimeout = _requestTimeout;
     try {
-      final request = await client
-          .postUrl(peer.baseUri.replace(path: path))
-          .timeout(_requestTimeout);
+      final uri = peer.baseUri.replace(path: path);
+      final request =
+          await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri))
+              .timeout(_requestTimeout);
       request.headers.set('x-khinsider', '$_protocol');
       request.headers.set('x-khinsider-name', deviceName);
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(payload));
+      if (payload != null) {
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(payload));
+      }
       final response = await request.close().timeout(_requestTimeout);
       final body = await utf8.decoder
           .bind(response)
@@ -531,13 +606,19 @@ class LanService {
       final decoded = jsonDecode(body);
       if (decoded is! Map) throw const LanException('对方返回的数据无法识别');
       return JsonMap.from(decoded);
-    } on LanException {
-      rethrow;
-    } catch (e) {
-      throw LanException('连不上 ${peer.name}：$e');
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// Re-probes [peer] by address and returns its refreshed entry, or null when
+  /// nothing answered.
+  Future<LanDevice?> _refreshPeer(LanDevice peer) async {
+    final answered = await _probeHost(peer.host);
+    if (answered == null) return null;
+    // The address may have changed hands, so prefer the entry we already know
+    // by id (the probe's own upsert refreshed it if it is the same device).
+    return _devices[peer.id] ?? answered;
   }
 
   /// A random, stable-per-install id (32 hex chars).

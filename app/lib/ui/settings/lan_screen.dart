@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,23 +23,31 @@ class _LanScreenState extends ConsumerState<LanScreen> {
   final _host = TextEditingController();
   final _hostFocus = FocusNode(debugLabel: 'lan-host');
   String? _expanded;
+  String? _confirm;
+  Timer? _confirmTimer;
+
+  /// Held in a field because `ref` must not be touched from [dispose]: Riverpod
+  /// throws there, and the throw would skip the rest of the teardown (the
+  /// "stop probing" call included).
+  LanController? _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = ref.read(lanControllerProvider.notifier);
     Future.microtask(() {
       if (!mounted) return;
-      final notifier = ref.read(lanControllerProvider.notifier);
       // Peers expire 20s after their last beacon, so discovery has to keep
       // running while this list is on screen (and only then).
-      notifier.setWatching(true);
-      notifier.refresh();
+      _controller?.setWatching(true);
+      _controller?.refresh();
     });
   }
 
   @override
   void dispose() {
-    ref.read(lanControllerProvider.notifier).setWatching(false);
+    _confirmTimer?.cancel();
+    _controller?.setWatching(false);
     _host.dispose();
     _hostFocus.dispose();
     super.dispose();
@@ -176,8 +186,10 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                                 ),
                               const SizedBox(height: 10),
                               Text(
-                                '同步是「合并」：两边都没有的专辑会补上，'
-                                '任何一边已有的收藏都不会被删除。',
+                                '普通同步只做「合并」：两边都没有的专辑会补上，'
+                                '已有的收藏都不会被删除。\n'
+                                '「强制覆盖」会用一边的收藏替换另一边，'
+                                '被覆盖那边的收藏会消失，所以需要连点两次确认。',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -206,7 +218,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         icon: Icons.devices,
         title: device.name,
         subtitle: [
-          device.host,
+          if (device.port == 0) '${device.host}（地址待确认）' else device.host,
           if (device.version.isNotEmpty) 'v${device.version}',
           '收藏 ${device.favorites} 张',
         ].join(' · '),
@@ -214,12 +226,18 @@ class _LanScreenState extends ConsumerState<LanScreen> {
           expanded ? Icons.expand_less : Icons.expand_more,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
-        onSelect: () => setState(() => _expanded = expanded ? null : device.id),
+        onSelect: () {
+          setState(() {
+            _expanded = expanded ? null : device.id;
+            _confirm = null;
+          });
+        },
       ),
       if (expanded) ...[
         SettingsRow(
           icon: Icons.upload,
           title: '把本机收藏发送到 ${device.name}',
+          subtitle: '只增不减',
           onSelect: state.busy
               ? null
               : () {
@@ -230,12 +248,37 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         SettingsRow(
           icon: Icons.download,
           title: '把 ${device.name} 的收藏合并到本机',
+          subtitle: '只增不减',
           onSelect: state.busy
               ? null
               : () {
                   setState(() => _expanded = null);
                   notifier.pullFavorites(device);
                 },
+        ),
+        _overwriteRow(
+          key: 'send:${device.id}',
+          icon: Icons.upload_file,
+          title: '强制：用本机收藏覆盖 ${device.name}',
+          confirmTitle: '再点一次：覆盖 ${device.name} 的收藏',
+          subtitle: '对方原有的收藏会被删除',
+          busy: state.busy,
+          onConfirmed: () {
+            setState(() => _expanded = null);
+            notifier.pushFavorites(device, replace: true);
+          },
+        ),
+        _overwriteRow(
+          key: 'pull:${device.id}',
+          icon: Icons.download_for_offline,
+          title: '强制：用 ${device.name} 的收藏覆盖本机',
+          confirmTitle: '再点一次：覆盖本机的收藏',
+          subtitle: '本机原有的收藏会被删除',
+          busy: state.busy,
+          onConfirmed: () {
+            setState(() => _expanded = null);
+            notifier.pullFavorites(device, replace: true);
+          },
         ),
         if (state.manualHosts.contains(device.host))
           SettingsRow(
@@ -246,6 +289,47 @@ class _LanScreenState extends ConsumerState<LanScreen> {
           ),
       ],
     ];
+  }
+
+  /// A destructive row that needs a second tap: the first tap turns the row
+  /// into its own confirmation, which avoids a dialog while still making an
+  /// irreversible action deliberate.
+  Widget _overwriteRow({
+    required String key,
+    required IconData icon,
+    required String title,
+    required String confirmTitle,
+    required String subtitle,
+    required bool busy,
+    required VoidCallback onConfirmed,
+  }) {
+    if (_confirm == key) {
+      return SettingsRow(
+        icon: Icons.warning_amber,
+        title: confirmTitle,
+        subtitle: '点击即执行，5 秒内没有再点就取消',
+        danger: true,
+        onSelect: () {
+          _confirmTimer?.cancel();
+          onConfirmed();
+        },
+      );
+    }
+    return SettingsRow(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      danger: true,
+      onSelect: busy ? null : () => _armConfirm(key),
+    );
+  }
+
+  void _armConfirm(String key) {
+    setState(() => _confirm = key);
+    _confirmTimer?.cancel();
+    _confirmTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _confirm = null);
+    });
   }
 
   /// On a TV the platform-view field is the only one a remote can type into

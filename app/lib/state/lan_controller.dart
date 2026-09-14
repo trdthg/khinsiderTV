@@ -129,12 +129,15 @@ class LanController extends AsyncNotifier<LanState> {
         return favorites.map(albumSummaryToJson).toList();
       },
       mergeFavorites: _mergeIncoming,
+      replaceFavorites: _replaceIncoming,
       onRemoteSync: (result) {
         if (!ref.mounted) return;
         _patch(
           (s) => s.copyWith(
-            status:
-                '${result.peer} 同步过来 ${result.added} 张收藏，本机现有 ${result.total} 张',
+            status: result.replaced
+                ? '${result.peer} 用它的收藏覆盖了本机：现在有 ${result.total} 张'
+                : '${result.peer} 同步过来 ${result.added} 张收藏，'
+                      '本机现有 ${result.total} 张',
           ),
         );
       },
@@ -233,23 +236,29 @@ class LanController extends AsyncNotifier<LanState> {
   }
 
   /// Send this device's favorites to [device]; it merges them into its own.
-  Future<void> pushFavorites(LanDevice device) async {
+  /// With [replace] the other side ends up with exactly this list.
+  Future<void> pushFavorites(LanDevice device, {bool replace = false}) async {
     final service = _service;
     if (service == null) return;
     _patch(
-      (s) =>
-          s.copyWith(busy: true, status: '正在发送到 ${device.name}…', error: null),
+      (s) => s.copyWith(
+        busy: true,
+        status: replace ? '正在用本机收藏覆盖 ${device.name}…' : '正在发送到 ${device.name}…',
+        error: null,
+      ),
     );
     try {
       final local = await ref.read(favoritesProvider.future);
-      final result = await service.pushFavorites(device);
+      final result = await service.pushFavorites(device, replace: replace);
       if (!ref.mounted) return;
       _patch(
         (s) => s.copyWith(
           busy: false,
-          status:
-              '已发送 ${local.length} 张收藏到 ${result.peer}，'
-              '对方新增 ${result.added} 张（现有 ${result.total} 张）',
+          status: replace
+              ? '已用本机的 ${local.length} 张收藏覆盖 ${result.peer}，'
+                    '对方现在有 ${result.total} 张'
+              : '已发送 ${local.length} 张收藏到 ${result.peer}，'
+                    '对方新增 ${result.added} 张（现有 ${result.total} 张）',
         ),
       );
     } catch (e) {
@@ -257,23 +266,30 @@ class LanController extends AsyncNotifier<LanState> {
     }
   }
 
-  /// Pull [device]'s favorites and merge them into this device's.
-  Future<void> pullFavorites(LanDevice device) async {
+  /// Pull [device]'s favorites into this device. With [replace] the local list
+  /// is overwritten, so anything the other device does not have is dropped.
+  Future<void> pullFavorites(LanDevice device, {bool replace = false}) async {
     final service = _service;
     if (service == null) return;
     _patch(
-      (s) =>
-          s.copyWith(busy: true, status: '正在从 ${device.name} 读取…', error: null),
+      (s) => s.copyWith(
+        busy: true,
+        status: replace
+            ? '正在用 ${device.name} 的收藏覆盖本机…'
+            : '正在从 ${device.name} 读取…',
+        error: null,
+      ),
     );
     try {
-      final result = await service.pullFavorites(device);
+      final result = await service.pullFavorites(device, replace: replace);
       if (!ref.mounted) return;
       _patch(
         (s) => s.copyWith(
           busy: false,
-          status:
-              '${result.peer} 的收藏已合并：新增 ${result.added} 张，'
-              '本机现有 ${result.total} 张',
+          status: replace
+              ? '已用 ${result.peer} 的收藏覆盖本机：现在有 ${result.total} 张'
+              : '${result.peer} 的收藏已合并：新增 ${result.added} 张，'
+                    '本机现有 ${result.total} 张',
         ),
       );
     } catch (e) {
@@ -281,7 +297,6 @@ class LanController extends AsyncNotifier<LanState> {
     }
   }
 
-  /// The service calls this when another device pushes its favorites here.
   Future<({int added, int total})> _mergeIncoming(
     List<JsonMap> incoming,
   ) async {
@@ -292,6 +307,20 @@ class LanController extends AsyncNotifier<LanState> {
     final added = await ref.read(favoritesProvider.notifier).mergeAll(albums);
     final total = await ref.read(favoritesProvider.future);
     return (added: added, total: total.length);
+  }
+
+  /// The service calls this when another device overwrites this one's list.
+  Future<({int added, int total})> _replaceIncoming(
+    List<JsonMap> incoming,
+  ) async {
+    final albums = incoming
+        .map(tryAlbumSummaryFromJson)
+        .whereType<AlbumSummary>()
+        .toList();
+    final total = await ref.read(favoritesProvider.notifier).replaceAll(albums);
+    // "added" is what the receiving UI should count: for an overwrite every
+    // album now in the list came from the other device.
+    return (added: total, total: total);
   }
 
   void _patch(LanState Function(LanState) change) {

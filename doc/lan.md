@@ -43,10 +43,26 @@ All requests must carry `x-khinsider: 1`; anything else gets `403`.
 | --- | --- | --- |
 | `GET` | `/kh/info` | id, name, version, favorite count |
 | `GET` | `/kh/favorites` | the favorites as JSON (`albumSummaryToJson`) |
-| `POST` | `/kh/favorites` | merge the body's favorites into this device, reply `{added, total}` |
+| `POST` | `/kh/favorites` | merge (or, with `"mode": "replace"`, overwrite) the body's favorites into this device, reply `{added, total, replaced}` |
 
 `x-khinsider-name` carries the caller's display name so the receiving side can
 say who synced.
+
+`mode` is optional and defaults to `"merge"`: an unknown or missing value merges,
+because that is the operation that cannot lose data. `"replace"` overwrites the
+receiving list with the body, so anything only the receiver had is gone.
+
+### When the connection fails
+
+A peer that answers the UDP broadcast but refuses the TCP connection is the
+failure this feature actually sees in the field: the address is right but the
+port came from an older beacon, or the device (a TV especially) dropped off the
+network and its radio needs a packet to wake up. Every request therefore gets
+one recovery attempt: a unicast probe to the same address, which refreshes the
+advertised port and gives a sleeping peer a reason to wake, followed by a second
+try. If that also fails, the error names the address and port it tried
+(`连不上 客厅电视（192.168.1.20:41827）：…`) instead of just the device name,
+because "can't connect" without an address is not something a user can act on.
 
 ## Security model
 
@@ -54,8 +70,13 @@ Plain HTTP, no authentication, and no TLS (a self-signed certificate would need
 pairing UI, and the devices have no way to verify each other). This is
 deliberate and its blast radius is small:
 
-* The only mutating operation is a **union merge** of favorites. It cannot
-  delete, cannot overwrite, and cannot run anything.
+* The ordinary sync is a **union merge** of favorites: it cannot delete,
+  cannot overwrite, and cannot run anything.
+* The two "overwrite" variants (`mode: "replace"`) *can* delete favorites on one
+  side. They are only sent after the row is tapped twice in a row, and the
+  receiving side needs no extra permission — anyone who can reach the port can
+  ask for a merge, which is exactly why an unattended device should keep the
+  feature switched off rather than rely on the confirmation.
 * Nothing about playback, files or account data is exposed.
 * Both devices must have the app open, and the user must start the sync from
   one of them.

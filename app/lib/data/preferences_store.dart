@@ -40,6 +40,18 @@ class FavoritesController extends AsyncNotifier<List<AlbumSummary>> {
   /// can arrive before the first screen ever watched favorites, and writing
   /// `state.value` (null) would replace the stored list with just the incoming
   /// ones.
+  /// Overwrites the whole list with [incoming]. Used by the forced LAN sync:
+  /// unlike [mergeAll] this really does delete what the other side does not
+  /// have, so it is only ever called from an explicitly confirmed action.
+  Future<int> replaceAll(Iterable<AlbumSummary> incoming) async {
+    final store = await ref.read(jsonKvStoreProvider.future);
+    final seen = <String>{};
+    final list = incoming.where((a) => seen.add(a.id)).toList();
+    store.write(_kFavorites, list.map(albumSummaryToJson).toList());
+    state = AsyncData(list);
+    return list.length;
+  }
+
   Future<int> mergeAll(Iterable<AlbumSummary> incoming) async {
     final store = await ref.read(jsonKvStoreProvider.future);
     final current =

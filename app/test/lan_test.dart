@@ -31,6 +31,10 @@ void main() {
         receivedByB.addAll(incoming);
         return (added: incoming.length, total: incoming.length + 1);
       },
+      replaceFavorites: (incoming) async {
+        receivedByB.addAll(incoming);
+        return (added: incoming.length, total: incoming.length + 1);
+      },
     );
     final a = LanService(
       deviceId: 'aaaaaaaa',
@@ -42,6 +46,7 @@ void main() {
         albumJson('t2', 'Two'),
       ],
       mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
     );
     await a.start();
     await b.start();
@@ -77,6 +82,111 @@ void main() {
     expect(pull.incoming, isTrue);
   });
 
+  test('a forced push overwrites the peer instead of merging', () async {
+    var merged = 0;
+    final replacedByB = <Object?>[];
+    final b = LanService(
+      deviceId: 'bbbbbbbb',
+      deviceName: 'Device B',
+      appVersion: '0.2.0',
+      discoveryPort: 41247,
+      readFavorites: () async => [albumJson('keep', 'Kept')],
+      mergeFavorites: (incoming) async {
+        merged++;
+        return (added: incoming.length, total: incoming.length);
+      },
+      replaceFavorites: (incoming) async {
+        replacedByB
+          ..clear()
+          ..addAll(incoming.map((j) => j['id']));
+        return (added: incoming.length, total: incoming.length);
+      },
+    );
+    final a = LanService(
+      deviceId: 'aaaaaaaa',
+      deviceName: 'Device A',
+      appVersion: '0.2.0',
+      discoveryPort: 41248,
+      readFavorites: () async => [
+        albumJson('t1', 'One'),
+        albumJson('t2', 'Two'),
+      ],
+      mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
+    );
+    await a.start();
+    await b.start();
+    addTearDown(() async {
+      await a.stop();
+      await b.stop();
+    });
+
+    final result = await a.pushFavorites(
+      LanDevice(
+        id: 'b',
+        name: 'Device B',
+        host: '127.0.0.1',
+        port: b.httpPort!,
+      ),
+      replace: true,
+    );
+
+    expect(result.replaced, isTrue);
+    expect(replacedByB, ['t1', 't2'], reason: 'the peer was overwritten');
+    expect(merged, 0, reason: 'a forced push must not quietly merge instead');
+    expect(result.total, 2);
+  });
+
+  test('a forced pull overwrites the local list', () async {
+    var merged = 0;
+    List<Object?>? replaced;
+    final b = LanService(
+      deviceId: 'bbbbbbbb',
+      deviceName: 'Device B',
+      appVersion: '0.2.0',
+      discoveryPort: 41249,
+      readFavorites: () async => [albumJson('old', 'Old')],
+      mergeFavorites: (incoming) async {
+        merged++;
+        return (added: incoming.length, total: incoming.length);
+      },
+      replaceFavorites: (incoming) async {
+        replaced = incoming.map((j) => j['id']).toList();
+        return (added: incoming.length, total: incoming.length);
+      },
+    );
+    final a = LanService(
+      deviceId: 'aaaaaaaa',
+      deviceName: 'Device A',
+      appVersion: '0.2.0',
+      discoveryPort: 41250,
+      readFavorites: () async => [albumJson('t1', 'One')],
+      mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
+    );
+    await a.start();
+    await b.start();
+    addTearDown(() async {
+      await a.stop();
+      await b.stop();
+    });
+
+    final result = await b.pullFavorites(
+      LanDevice(
+        id: 'a',
+        name: 'Device A',
+        host: '127.0.0.1',
+        port: a.httpPort!,
+      ),
+      replace: true,
+    );
+
+    expect(result.replaced, isTrue);
+    expect(replaced, ['t1'], reason: "A's list replaced B's, old id is gone");
+    expect(merged, 0);
+    expect(result.total, 1);
+  });
+
   test('the remote-sync callback fires when another device pushes', () async {
     LanSyncResult? seen;
     final b = LanService(
@@ -86,6 +196,7 @@ void main() {
       discoveryPort: 41243,
       readFavorites: () async => [],
       mergeFavorites: (incoming) async => (added: 1, total: 1),
+      replaceFavorites: (incoming) async => (added: 1, total: 1),
       onRemoteSync: (result) => seen = result,
     );
     final a = LanService(
@@ -95,6 +206,7 @@ void main() {
       discoveryPort: 41244,
       readFavorites: () async => [albumJson('t1', 'One')],
       mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
     );
     await a.start();
     await b.start();
@@ -125,6 +237,7 @@ void main() {
       discoveryPort: 41245,
       readFavorites: () async => [albumJson('t1', 'One')],
       mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
     );
     await service.start();
     addTearDown(service.stop);
@@ -149,6 +262,7 @@ void main() {
       discoveryPort: 41246,
       readFavorites: () async => [],
       mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
     );
     await service.start();
     addTearDown(service.stop);
@@ -157,7 +271,15 @@ void main() {
       service.pushFavorites(
         const LanDevice(id: 'x', name: 'Nowhere', host: '127.0.0.1', port: 1),
       ),
-      throwsA(isA<LanException>()),
+      throwsA(
+        isA<LanException>().having(
+          (e) => e.message,
+          'message',
+          // The address has to be in the message: "连不上 X" alone is what made
+          // the first field report impossible to act on.
+          allOf(contains('127.0.0.1:1'), contains('连不上')),
+        ),
+      ),
     );
   });
 
@@ -201,6 +323,7 @@ void main() {
           albumJson('c', 'C'),
         ],
         mergeFavorites: (incoming) async => (added: 0, total: 0),
+        replaceFavorites: (incoming) async => (added: 0, total: 0),
       );
 
       expect(service.beaconPayload('probe')['fav'], 0, reason: 'not read yet');
