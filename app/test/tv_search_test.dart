@@ -222,4 +222,47 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the TV keyboard can type uppercase and symbols', (tester) async {
+    await pump(tester, tv: true);
+
+    // Uppercase: the shift key locks on (a remote user would otherwise need a
+    // press per letter), and the letters turn into capitals.
+    await tester.tap(key('⇧'));
+    await tester.pump();
+    expect(find.widgetWithText(DpadTile, 'A'), findsWidgets);
+    await tester.tap(key('A'));
+    await tester.pump();
+    await tester.tap(key('B'));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'AB',
+      reason:
+          'the shift key must stay on so a remote can type several capitals',
+    );
+
+    // Symbols: the layer key swaps the grid, and the same spot switches back.
+    await tester.tap(key('#+='));
+    await tester.pump();
+    expect(find.widgetWithText(DpadTile, '@'), findsWidgets);
+    await tester.tap(key('@'));
+    await tester.pump();
+    await tester.tap(key('é'));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'AB@é',
+      reason: 'punctuation and accented letters must be reachable',
+    );
+
+    await tester.tap(key('ABC'));
+    await tester.pump();
+    expect(find.widgetWithText(DpadTile, 'a'), findsWidgets);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'AB@é',
+      reason: 'switching back to letters must not type anything',
+    );
+  });
 }

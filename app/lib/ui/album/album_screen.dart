@@ -118,9 +118,11 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
   /// The retry matters because the page is usually pushed as a ROUTE: while
   /// the route transition runs, the navigator's own focus scope can grab the
   /// focus back, and a single post-frame request would be lost.
-  void _requestRowFocus(int index, {int attempts = 1}) {
+  void _requestRowFocus(int index, {int attempts = 1, bool allowZen = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _zen || index >= _rowFocusNodes.length) return;
+      if (!mounted || (!allowZen && _zen) || index >= _rowFocusNodes.length) {
+        return;
+      }
       final node = _rowFocusNodes[index];
       node.requestFocus();
       if (!node.hasFocus && attempts > 1) {
@@ -152,25 +154,23 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
       _zen = true;
     });
     _zenCtrl.forward();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final i = ref.read(playerControllerProvider).currentIndex ?? index;
-      if (i >= 0 && i < _rowFocusNodes.length) {
-        _rowFocusNodes[i].requestFocus();
-      }
-    });
+    // The zen layout replaces the whole page, so a single post-frame request
+    // races the rebuild and used to leave the focus wherever it happened to be
+    // (usually nowhere): retry, and keep the focused track = the one playing.
+    _requestRowFocus(
+      ref.read(playerControllerProvider).currentIndex ?? index,
+      attempts: 12,
+      allowZen: true,
+    );
   }
 
   void _exitZen() {
     setState(() => _zen = false);
     _zenCtrl.reverse();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final i = ref.read(playerControllerProvider).currentIndex;
-      if (i != null && i >= 0 && i < _rowFocusNodes.length) {
-        _rowFocusNodes[i].requestFocus();
-      }
-    });
+    // Back on the album page the remote lands on the track that was playing,
+    // i.e. the one the user was looking at in zen mode.
+    final i = ref.read(playerControllerProvider).currentIndex;
+    if (i != null && i >= 0) _requestRowFocus(i, attempts: 12);
   }
 
   void _toggleMenu() {
@@ -205,41 +205,62 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
       albumDetailProvider((widget.albumId, _refreshNonce)),
     );
 
-    return detail.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Failed to load album:\n$e', textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => setState(() => _refreshNonce++),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-      data: (album) {
-        _focusFirstTrack();
-        _syncCacheStatus(album);
-        return ColoredBox(
-          color: Theme.of(context).colorScheme.surface,
-          child: _AlbumPage(
-            album: album,
-            zen: _zen,
-            zenT: _zenT,
-            menuOpen: _menuOpen,
-            rowFocusNodes: _ensureRowFocusNodes(album.tracks.length),
-            coverFocus: _coverFocus,
-            menuPlayFocus: _menuPlayFocus,
-            onTrackActivated: (index) => _activateTrack(album, index),
-            onExitZen: _exitZen,
-            onToggleMenu: _toggleMenu,
-            onRefresh: () => setState(() => _refreshNonce++),
-          ),
-        );
+    // The remote's back button (and the system back gesture) pops the route
+    // directly instead of sending a key event, so zen mode has to intercept it
+    // here: without this, back in zen mode left the album and landed on the
+    // search screen. One back always means "one level out": menu -> zen ->
+    // album -> search.
+    return PopScope(
+      canPop: !_zen && !_menuOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          // Actually leaving the album: drop playback the same way the back
+          // button does.
+          _releaseAlbumPlayback(context, ref);
+          return;
+        }
+        if (_menuOpen) {
+          _toggleMenu();
+        } else {
+          _exitZen();
+        }
       },
+      child: detail.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Failed to load album:\n$e', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => setState(() => _refreshNonce++),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+        data: (album) {
+          _focusFirstTrack();
+          _syncCacheStatus(album);
+          return ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: _AlbumPage(
+              album: album,
+              zen: _zen,
+              zenT: _zenT,
+              menuOpen: _menuOpen,
+              rowFocusNodes: _ensureRowFocusNodes(album.tracks.length),
+              coverFocus: _coverFocus,
+              menuPlayFocus: _menuPlayFocus,
+              onTrackActivated: (index) => _activateTrack(album, index),
+              onExitZen: _exitZen,
+              onToggleMenu: _toggleMenu,
+              onRefresh: () => setState(() => _refreshNonce++),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -285,7 +306,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
   /// back button (and Esc) look dead when the album screen happened to be the
   /// entry route.
   void _leave() {
-    unawaited(ref.read(playerControllerProvider.notifier).pause());
+    _releaseAlbumPlayback(context, ref);
     final navigator = Navigator.of(context);
     if (navigator.canPop()) {
       navigator.maybePop();
@@ -685,29 +706,28 @@ class _MobileAlbumHeader extends ConsumerWidget {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    const SizedBox(height: 8),
-                    // Align to the left so the buttons keep their natural width
-                    // instead of stretching across the column.
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _FavoriteButton(album: album.summary),
-                          // The phone header is where this is discoverable: the
-                          // cache-folder row sits inside "Album details", which
-                          // albums without metadata do not even render.
-                          if (ref
-                              .watch(audioCacheManagerProvider)
-                              .supportsPublicMusicFolder)
-                            _ExportToMusicButton(album: album),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
+            ],
+          ),
+          // Favorite and Export sit on ONE row under the cover, on the full
+          // width of the screen. Inside the title column they only had the
+          // leftover width (screen minus the 104 px cover), so the two buttons
+          // wrapped onto two rows on every phone.
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _FavoriteButton(album: album.summary)),
+              // The phone header is where this is discoverable: the
+              // cache-folder row sits inside "Album details", which albums
+              // without metadata do not even render.
+              if (ref
+                  .watch(audioCacheManagerProvider)
+                  .supportsPublicMusicFolder) ...[
+                const SizedBox(width: 8),
+                Expanded(child: _ExportToMusicButton(album: album)),
+              ],
             ],
           ),
           if (metadata != null) ...[
@@ -921,4 +941,19 @@ Future<void> exportAlbumToMusic(
   return Navigator.of(context).push(
     MaterialPageRoute<void>(builder: (_) => ExportAlbumScreen(album: album)),
   );
+}
+
+/// Drops playback when the album screen is left on a TV.
+///
+/// Wide layouts have no mini player: the album page IS the player UI, so
+/// popping back to the search screen with audio still running would leave
+/// nothing on screen to control it. A phone keeps its mini player and only
+/// pauses, exactly as before.
+void _releaseAlbumPlayback(BuildContext context, WidgetRef ref) {
+  final controller = ref.read(playerControllerProvider.notifier);
+  if (MediaQuery.sizeOf(context).width > 700) {
+    unawaited(controller.stop());
+  } else {
+    unawaited(controller.pause());
+  }
 }

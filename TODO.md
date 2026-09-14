@@ -588,3 +588,52 @@
   `MissingPluginException`，而是永不返回**（把整个测试进程挂住）。要断言「没有
   handler 也能活」，得让 mock handler 主动 `throw MissingPluginException(...)`。
 
+## N. 第十一轮：手机布局、循环、禅模式与 TV 键盘
+
+- [x] **N1 收藏 + 导出挤成两排（安卓）**
+      手机版专辑头部把它们放在「标题那一列」里（`Wrap`），而那列只剩
+      `屏宽 - 104px 封面 - 12` 的宽度，两个带文字的按钮必然换行。现在这两个按钮
+      挪到封面下面、**占满整行**并排（`Expanded` 一人一半），手机上也只有一排。
+      Chromecast 那边这两个按钮分别在信息栏和缓存提示行里，位置本来就不一样，
+      宽度由信息栏限制，没有跟着改（用户提到的「限制滚动宽度」按这个理解处理）。
+- [x] **N2 安卓：最近搜索跟搜索框都在下面**
+      手机布局的搜索框本来就贴底，但「最近搜索」在顶部空闲页里，离输入的地方隔了一屏。
+      现在窄屏把历史改成 `_RecentSearchesStrip`：一行可横向滚动的 chip，紧贴搜索框上方，
+      并且空闲页里不再重复显示（`_IdleHome(showHistory: narrow ? false : true)`）。
+      宽屏（TV/桌面）保持原样。
+- [x] **N3 默认循环播放**
+      之前 `just_audio` 的队列播完就 `pause()` 并回到第 0 首（等于停住），
+      `PlayerController.next()` 到专辑末尾也是直接 return。现在两者都循环：
+      队列播完 → `_loopAlbum()` 重新 `playAlbum(album, startIndex: 0)`；
+      在最后一首按下一首 → 同样回到第一首。`_looping` 防重入（completed 快照会重复推）。
+      注意 `next()` 里是 `unawaited`：通知栏「下一首」要立刻响应，加载失败会走 state.error。
+- [x] **N4 Chromecast：退出专辑要停止播放**
+      宽屏没有迷你可视化播放条，专辑页**就是**播放器 UI，退出后音频还在放却没有任何入口去控制。
+      现在 `_releaseAlbumPlayback()`：宽屏 `stop()`（清空队列、结束媒体会话），
+      窄屏仍然只 `pause()`（手机有迷你可视化条，保持原行为）。
+- [x] **N5 Chromecast：退出禅模式回专辑页（不是搜索页）**
+      根因：遥控器的返回键在 Android 上是**系统 pop**，不是 key event，
+      所以 `_onBack()` 根本收不到 —— 上一级路由直接被丢掉。现在专辑页外面套了
+      `PopScope(canPop: !zen && !menuOpen)`：禅模式/OSD 打开时拦住 pop，
+      按一次退一级（OSD → 禅模式 → 专辑页 → 搜索页）；真正退出专辑时也会触发
+      `_releaseAlbumPlayback()`（补上系统返回这条路径的停止播放）。
+- [x] **N6 进出禅模式焦点都落在「对应的曲目」上**
+      `_requestRowFocus()` 里有一句 `if (_zen) return;` —— 禅模式里它拒绝做任何事，
+      而进入禅模式时只做了一次 post-frame `requestFocus()`，跟重建抢时间，经常丢。
+      现在 `_requestRowFocus(index, attempts: 12, allowZen: true)`，进入禅模式聚焦
+      `currentIndex`（正在播放的那首），退出禅模式同样重试聚焦 `currentIndex`。
+- [x] **N7 TV 键盘支持大写与特殊字符**
+      `TvKeyboard` 现在有两层：字母层（数字 + qwerty + `⇧` 大写锁定键）和符号层
+      （`!@#$%&*()?`、括号、标点，外加 `é è ü ö ä ñ ç` 这些专辑名里真有的大小写字母）。
+      切换层的键固定在底行最后一格，来回切换时准星不会跑。大写是「锁定」而不是
+      「一次」：遥控器按一次换一个字母太痛苦。方向键仍然是自己算网格（几何遍历在
+      960×540 上会卡住），键位节点固定 10 列 × 5 行，切层时按当前层的行长重新 clamp。
+      *为什么不用系统输入法*：Android TV 上从 Flutter 文本框无法把焦点交给 IME 窗口
+      （方向键先被框架吃掉了），系统键盘会出现但按不动，所以 TV 走自绘键盘；
+      手机/桌面依旧用系统输入法（`readOnly` 只在 TV 上为 true）。
+- 回归测试：`test/tv_focus_test.dart` 新增「系统返回键在禅模式只退出禅模式、不离开专辑」；
+  `test/tv_search_test.dart` 新增「TV 键盘能打大写和符号」；`media_session_test.dart`
+  里「最后一首按下一首」的用例改名并注明现在是循环。
+- 没写测试的两条：N4（宽屏退出专辑的 `stop()`）和 N3 的「播完自动循环」需要真实
+  构造 completed 快照 / 有下级路由的 Navigator，测试里搭建成本高，先在真机上验。
+

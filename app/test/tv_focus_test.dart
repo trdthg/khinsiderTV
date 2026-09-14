@@ -9,6 +9,7 @@ import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/update_controller.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
 import 'package:khinsider/ui/now_playing/now_playing_art.dart';
+import 'package:khinsider/ui/search/search_screen.dart';
 import 'package:khinsider/ui/shared/update_banner.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
@@ -225,6 +226,31 @@ void main() {
       labels,
       containsAll(<String>['update-action', 'update-view', 'update-close']),
     );
+  });
+  testWidgets('the remote back in zen mode exits zen and keeps the album', (
+    tester,
+  ) async {
+    await pumpWide(tester);
+
+    await tester.tap(find.text('Track 1 — Some Fairly Long Track Name Here'));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    // Android sends the remote's back press as a system pop, not as a key
+    // event: it used to pop the album route and land on the search screen.
+    await tester.binding.handlePopRoute();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(
+      find.byType(SearchScreen),
+      findsNothing,
+      reason: 'back in zen mode must not leave the album',
+    );
+    // ...and the focus comes back onto the track that was playing.
+    expect(focusedLabel(), 'row-0');
   });
 }
 

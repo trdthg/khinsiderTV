@@ -139,6 +139,10 @@ class PlayerController extends Notifier<PlayerState>
   Future<void>? _prefetchFuture;
   Album? _playingAlbum;
 
+  /// True while [_loopAlbum] is reloading the album, so the `completed` state
+  /// that triggered it cannot trigger it again.
+  bool _looping = false;
+
   /// Maps impl-queue position -> album track index. The audio queue only
   /// contains tracks resolved so far, starting at the clicked track, so the
   /// impl's currentIndex must be translated before UI code uses it.
@@ -180,6 +184,7 @@ class PlayerController extends Notifier<PlayerState>
             currentIndex: _implIndexToAlbumIndex(snap.currentIndex),
           );
           unawaited(_prefetchNext());
+          if (snap.completed) unawaited(_loopAlbum());
         }),
       )
       ..add(
@@ -535,13 +540,36 @@ class PlayerController extends Notifier<PlayerState>
   /// the queue deliberately holds only the current track plus one prefetched
   /// successor, so a system "next" that arrives while that prefetch is still
   /// running used to be a silent no-op — the notification button looked dead.
+  /// Default looping: the queue is an album, so reaching its end starts the
+  /// album over instead of stopping dead (the user asked for loop-by-default).
+  ///
+  /// Called when the impl reports `completed`, i.e. the last resolved track
+  /// finished. Guarded because `completed` is pushed on every snapshot of that
+  /// state, and reloading the album mid-reload would fight itself.
+  Future<void> _loopAlbum() async {
+    final album = _playingAlbum;
+    if (album == null || album.tracks.isEmpty || _looping) return;
+    _looping = true;
+    try {
+      await playAlbum(album, startIndex: 0);
+    } finally {
+      _looping = false;
+    }
+  }
+
   @override
   Future<void> next() async {
     final album = _playingAlbum;
     final current = state.currentIndex;
     if (album != null && current != null) {
       final nextIndex = current + 1;
-      if (nextIndex >= album.tracks.length) return; // end of the album
+      if (nextIndex >= album.tracks.length) {
+        // End of the album: loop back to its first track (see [_loopAlbum]).
+        // Not awaited: the notification's "next" should answer immediately, and
+        // a failed reload already surfaces through the controller's error state.
+        unawaited(_loopAlbum());
+        return;
+      }
       if (!_albumIndexOfQueue.contains(nextIndex)) {
         await _prefetchNext(fromIndex: current);
         // Resolution failed or was cancelled: stay where we are rather than

@@ -25,6 +25,14 @@ import '../../core/widgets/dpad_tile.dart';
 /// all. Moving an index in a grid is exact, cheap, and cannot depend on the
 /// screen size. Rows keep their own length, and moving vertically keeps the
 /// column (clamped), which is what every TV keyboard does.
+///
+/// Two layers, because a remote cannot do what a shift key does on a phone:
+/// * letters — digits, the `qwerty` rows, and a `⇧` key that locks uppercase on
+///   (a remote user would otherwise need three presses for "ABBA");
+/// * symbols — `!@#$%&*()?`, brackets and punctuation, plus the accented
+///   letters album titles actually use (`é è ü ö ä ñ ç`). The last key of the
+///   bottom row switches layers in the same spot, so switching back and forth
+///   never moves the target out from under the thumb.
 class TvKeyboard extends StatefulWidget {
   const TvKeyboard({
     super.key,
@@ -49,16 +57,30 @@ class TvKeyboard extends StatefulWidget {
   State<TvKeyboard> createState() => _TvKeyboardState();
 }
 
+/// Which set of keys the grid is showing.
+enum _Layer { letters, symbols }
+
 class _TvKeyboardState extends State<TvKeyboard> {
-  /// Letter rows, Leanback style: digits on top, then the alphabet.
+  static const String _shiftKey = 'SHIFT';
+  static const String _layerKey = 'LAYER';
+
+  /// Digits on top, then the alphabet — Leanback style.
   static const List<List<String>> _letterRows = [
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
     ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-    ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', _shiftKey, _layerKey],
   ];
 
-  /// Names for the last row, which holds the action keys.
+  /// Punctuation, brackets and the accented letters the site's titles use.
+  static const List<List<String>> _symbolRows = [
+    ['!', '@', '#', '\$', '%', '&', '*', '(', ')', '?'],
+    ['-', '_', '=', '+', '[', ']', '{', '}', '/', '\\'],
+    ['.', ',', ':', ';', '\'', '"', '~', '`', '<'],
+    ['>', 'é', 'è', 'ü', 'ö', 'ä', 'ñ', 'ç', _layerKey],
+  ];
+
+  /// Action keys on their own row: Space / Delete / Clear / Search / Hide.
   static const List<String> _actionLabels = [
     'space',
     'delete',
@@ -67,13 +89,29 @@ class _TvKeyboardState extends State<TvKeyboard> {
     'hide',
   ];
 
-  /// One focus node per key, row by row, actions last. Holding them here is what
+  static const int _maxKeysPerRow = 10;
+
+  _Layer _layer = _Layer.letters;
+  bool _shift = false;
+
+  /// The keys of the layer currently shown.
+  List<List<String>> get _rows =>
+      _layer == _Layer.letters ? _letterRows : _symbolRows;
+
+  /// Keys per row, action row last: what navigation clamps against.
+  List<int> get _sizes => [
+    for (final row in _rows) row.length,
+    _actionLabels.length,
+  ];
+
+  /// One focus node per grid cell, held for the lifetime of the keyboard so the
+  /// key a node belongs to survives a layer switch. Holding them here is what
   /// makes arrow navigation exact.
   late final List<List<FocusNode>> _nodes = [
-    for (final row in [..._letterRows, _actionLabels])
+    for (var row = 0; row < _letterRows.length + 1; row++)
       [
-        for (final label in row)
-          FocusNode(debugLabel: 'tv-key-$label', skipTraversal: true),
+        for (var col = 0; col < _maxKeysPerRow; col++)
+          FocusNode(debugLabel: 'tv-key-$row-$col', skipTraversal: true),
       ],
   ];
 
@@ -105,9 +143,9 @@ class _TvKeyboardState extends State<TvKeyboard> {
   }
 
   void _focus(int row, int col) {
-    final rows = _nodes.length;
-    final nextRow = row.clamp(0, rows - 1);
-    final nextCol = col.clamp(0, _nodes[nextRow].length - 1);
+    final sizes = _sizes;
+    final nextRow = row.clamp(0, sizes.length - 1);
+    final nextCol = col.clamp(0, sizes[nextRow] - 1);
     _row = nextRow;
     _col = nextCol;
     _nodes[nextRow][nextCol].requestFocus();
@@ -115,6 +153,47 @@ class _TvKeyboardState extends State<TvKeyboard> {
 
   /// Moves one step in the grid, clamped to the row/column that exists there.
   void _move({int row = 0, int col = 0}) => _focus(_row + row, _col + col);
+
+  void _setLayer(_Layer layer) {
+    setState(() {
+      _layer = layer;
+      _shift = false;
+    });
+    // The grid changed shape around the current column: re-clamp and put the
+    // focus back onto a key that exists.
+    _focus(_row, _col);
+  }
+
+  void _toggleShift() {
+    setState(() => _shift = !_shift);
+    _nodes[_row][_col].requestFocus();
+  }
+
+  /// Presses the grid key at [row]/[col]: types it, or toggles a mode key.
+  void _activateKey(int row, int col) {
+    final character = _characterAt(row, col);
+    if (character != null) {
+      widget.onKey(character);
+      return;
+    }
+    if (row >= _rows.length) return;
+    final label = _rows[row][col];
+    if (label == _shiftKey) {
+      _toggleShift();
+    } else if (label == _layerKey) {
+      _setLayer(_layer == _Layer.letters ? _Layer.symbols : _Layer.letters);
+    }
+  }
+
+  /// What the key at [row]/[col] types, or null for the keys that act instead
+  /// (shift, layer switch).
+  String? _characterAt(int row, int col) {
+    if (row >= _rows.length) return null;
+    final label = _rows[row][col];
+    if (label == _shiftKey || label == _layerKey) return null;
+    if (_layer == _Layer.letters && _shift) return label.toUpperCase();
+    return label;
+  }
 
   /// Physical keyboards keep working: the panel sits above the key tiles in the
   /// focus tree, so printable keys arrive here after the tiles decline them.
@@ -159,42 +238,85 @@ class _TvKeyboardState extends State<TvKeyboard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    Widget tile(
+    Widget cell(
       int row,
-      int index,
-      VoidCallback onSelect, {
-      Widget? child,
-      String? label,
+      int col, {
+      required Widget child,
+      // Fixed key width for the grid; null lets the action keys take the width
+      // their icon + label need.
+      double? width = 46,
+      Color? background,
+      Color? foreground,
+      VoidCallback? onSelect,
     }) {
       return Padding(
         padding: const EdgeInsets.all(2),
         child: DpadTile(
-          focusNode: _nodes[row][index],
+          focusNode: _nodes[row][col],
           borderRadius: 8,
-          onSelect: onSelect,
+          onSelect: onSelect ?? () => _activateKey(row, col),
           child: Container(
-            width: label == null ? null : 46,
+            width: width,
             height: 44,
             alignment: Alignment.center,
-            padding: label == null
-                ? const EdgeInsets.symmetric(horizontal: 14)
-                : null,
-            child: child ?? Text(label!, style: const TextStyle(fontSize: 16)),
+            padding: EdgeInsets.symmetric(horizontal: width == null ? 14 : 4),
+            decoration: background == null
+                ? null
+                : BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(fontSize: 16, color: foreground),
+              child: child,
+            ),
           ),
         ),
       );
     }
 
+    /// A typing key, or one of the two keys that switch modes.
+    Widget key(int row, int col) {
+      final label = _rows[row][col];
+      if (label == _shiftKey) {
+        return cell(
+          row,
+          col,
+          background: _shift ? scheme.primary : null,
+          foreground: _shift ? scheme.onPrimary : null,
+          child: const Text('⇧'),
+        );
+      }
+      if (label == _layerKey) {
+        return cell(
+          row,
+          col,
+          child: Text(
+            _layer == _Layer.letters ? '#+=' : 'ABC',
+            style: const TextStyle(fontSize: 14),
+          ),
+        );
+      }
+      return cell(
+        row,
+        col,
+        child: Text(
+          _layer == _Layer.letters && _shift ? label.toUpperCase() : label,
+        ),
+      );
+    }
+
     Widget action(
-      int index,
+      int col,
       String name,
       IconData icon,
       VoidCallback onSelect, {
       Color? foreground,
-    }) => tile(
+    }) => cell(
       4,
-      index,
-      onSelect,
+      col,
+      width: null,
+      onSelect: onSelect,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -204,6 +326,7 @@ class _TvKeyboardState extends State<TvKeyboard> {
         ],
       ),
     );
+
     return Focus(
       onKeyEvent: _onKeyEvent,
       child: Material(
@@ -213,17 +336,12 @@ class _TvKeyboardState extends State<TvKeyboard> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (var row = 0; row < _letterRows.length; row++)
+              for (var row = 0; row < _rows.length; row++)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    for (var i = 0; i < _letterRows[row].length; i++)
-                      tile(
-                        row,
-                        i,
-                        () => widget.onKey(_letterRows[row][i]),
-                        label: _letterRows[row][i],
-                      ),
+                    for (var col = 0; col < _rows[row].length; col++)
+                      key(row, col),
                   ],
                 ),
               const SizedBox(height: 4),
@@ -241,29 +359,23 @@ class _TvKeyboardState extends State<TvKeyboard> {
                   const SizedBox(width: 4),
                   action(2, 'Clear', Icons.clear, widget.onClear),
                   const SizedBox(width: 4),
-                  tile(
+                  cell(
                     4,
                     3,
-                    widget.onSubmit,
-                    child: Container(
-                      height: 44,
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      decoration: BoxDecoration(
-                        color: scheme.primary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.search, size: 18, color: scheme.onPrimary),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Search',
-                            style: TextStyle(color: scheme.onPrimary),
-                          ),
-                        ],
-                      ),
+                    width: null,
+                    onSelect: widget.onSubmit,
+                    background: scheme.primary,
+                    foreground: scheme.onPrimary,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.search, size: 18, color: scheme.onPrimary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Search',
+                          style: TextStyle(color: scheme.onPrimary),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 4),

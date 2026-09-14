@@ -532,7 +532,7 @@ void main() {
       },
     );
 
-    test('next() on the last track does not advance', () async {
+    test('next() on the last track loops instead of asking the impl', () async {
       final player = RecordingPlayer();
       final client = HoldableClient();
       final album = _album();
@@ -550,6 +550,8 @@ void main() {
       await play;
 
       await controller.next();
+      // Default looping: the album restarts (a fresh playAlbum), so the impl's
+      // own next() must not be used for this - it has nowhere to go.
       expect(player.calls, isNot(contains('next')));
     });
   });

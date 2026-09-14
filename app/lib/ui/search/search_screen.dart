@@ -188,7 +188,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return Column(
       children: [
         if (!narrow) searchBar,
-        Expanded(child: _buildBody(context, state, reverse: narrow)),
+        Expanded(
+          child: _buildBody(
+            context,
+            state,
+            reverse: narrow,
+            // Narrow layouts keep the history next to the search field below
+            // instead (see _RecentSearchesStrip): on a phone the field is at
+            // the bottom, so a history list at the top is a screen away from
+            // the thing it belongs to.
+            hideHistory: narrow,
+          ),
+        ),
+        if (narrow && !state.hasSearched) const _RecentSearchesStrip(),
         if (narrow) searchBar,
         if (_tv && _keyboardOpen)
           TvKeyboard(
@@ -206,6 +218,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     BuildContext context,
     SearchState state, {
     bool reverse = false,
+    bool hideHistory = false,
   }) {
     if (state.loading) {
       return const Center(child: CircularProgressIndicator());
@@ -214,7 +227,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return _Message(icon: Icons.error_outline, text: state.error!);
     }
     if (!state.hasSearched) {
-      return const _IdleHome();
+      return _IdleHome(showHistory: !hideHistory);
     }
     if (state.results.isEmpty) {
       return const _Message(icon: Icons.search_off, text: 'No albums found.');
@@ -223,9 +236,69 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
+/// The narrow layout's recent searches: one scrollable row of chips sitting
+/// directly on top of the (bottom-anchored) search field, so the history is
+/// where the typing happens instead of a screen away at the top.
+class _RecentSearchesStrip extends ConsumerWidget {
+  const _RecentSearchesStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(searchHistoryProvider).value ?? const [];
+    if (history.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 4, 2),
+      child: Row(
+        children: [
+          Icon(
+            Icons.history,
+            size: 18,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: history.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final q = history[i];
+                  return Center(
+                    child: DpadTile(
+                      borderRadius: 18,
+                      onSelect: () =>
+                          ref.read(searchControllerProvider.notifier).search(q),
+                      child: Chip(
+                        label: Text(q),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          DpadIconButton(
+            tooltip: 'Clear history',
+            iconSize: 20,
+            icon: Icons.delete_outline,
+            onPressed: () => ref.read(searchHistoryProvider.notifier).clear(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Idle state: search history + favorites + recently viewed.
 class _IdleHome extends ConsumerWidget {
-  const _IdleHome();
+  const _IdleHome({this.showHistory = true});
+
+  /// False on the narrow layout, where [_RecentSearchesStrip] owns the history.
+  final bool showHistory;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -236,7 +309,7 @@ class _IdleHome extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (history.isNotEmpty) ...[
+        if (showHistory && history.isNotEmpty) ...[
           Row(
             children: [
               const Icon(Icons.history, size: 18),
@@ -285,7 +358,9 @@ class _IdleHome extends ConsumerWidget {
             icon: Icons.history,
             albums: recents,
           ),
-        if (history.isEmpty && favorites.isEmpty && recents.isEmpty)
+        if ((!showHistory || history.isEmpty) &&
+            favorites.isEmpty &&
+            recents.isEmpty)
           const _Message(
             icon: Icons.music_note,
             text:
