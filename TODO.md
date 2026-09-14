@@ -783,3 +783,32 @@
 - [x] **T6 测试**：`settings_test.dart` 8 条（含「拒绝安装后重试不重新下载」「显示要下载的包名」）、
   `seek_bar_test.dart` 4 条（新增）、`lan_test.dart` 9 条（含信标必须带 `fav`）；全套 **143 个测试通过**。
 
+## U. v0.2.2：Chromecast 装不上（「软件包似乎无效」）
+
+用户反馈：TV 上提示**软件包似乎无效**，问 armv7a 能不能直接装（universal 包）。
+
+先做的排查（结论：**发布出来的 APK 没问题**）：
+- 用 App 完全相同的方式（同一个 `browser_download_url` + 同样的 `Accept` 头）下载 universal 包，得到 37,094,963 字节，
+  与普通下载 **sha256 完全一致**，`unzip -t` 通过 —— 下载链路本身没问题；
+- 包里有 `lib/arm64-v8a`、**`lib/armeabi-v7a`**、`lib/x86_64`，v2/v3 签名块存在（v1 签名文件没有是正常的），
+  `AndroidManifest.xml`、`classes.dex` 都在 —— 所以 armv7a **可以**安装（universal 包就是给这种设备用的）；
+- `path_provider` 的 `getApplicationSupportDirectory()` 在 Android 上就是 `filesDir`，
+  和 `file_paths.xml` 里的 `<files-path path="updates/">` 对得上 —— FileProvider 路径也没有错；
+- 结论：问题在设备上那条「把文件交给安装器」的链路上，而那条链路当时**没有任何反馈**。
+
+所以这一版做的是「换掉那条链路 + 让它会说话」：
+- [x] **U1 改用 PackageInstaller session**：`MainActivity.startInstallSession()` 把 APK 流写进 session 再 `commit`，
+      不经过 content URI；`ACTION_VIEW`/`ACTION_INSTALL_PACKAGE` 保留为兜底（session 抛异常时）。
+      注意 `STATUS_PENDING_USER_ACTION` 必须自己 `startActivity(EXTRA_INTENT)`，否则会静默等待。
+- [x] **U2 把系统判定报回来**：`BroadcastReceiver` 收 `PackageInstaller.EXTRA_STATUS`，
+      经 channel `installResult` 回传，Dart 侧 `InstallResult.explanation` 翻译成中文：
+      「签名冲突，需要先卸载旧版本」「存储空间不足」「系统阻止了安装（安装未知应用没允许）」「安装包无效」等。
+      这条信息是之前完全拿不到的，下次再失败就能直接看到原因。
+- [x] **U3 按 ABI 下更小的包**：新增 `androidAbi` channel 方法读 `applicationInfo.nativeLibraryDir`；
+      armv7 设备下 17MB 的 `-armv7.apk`，而不再一律下 37MB 的 universal 包（设置页会显示要下的包名）。
+- [x] **U4 下载后先校验**：比对 GitHub API 的 `size` + 检查 ZIP 头（`PK\x03\x04`）；
+      不合格就删文件并明确报「下载不完整（x / y MB）」，绝不把坏文件交给安装器。
+      下载前清掉同扩展名的旧安装包（`pending` 目录等不碰）。
+- [x] **U5 测试**：新增 `update_download_test.dart` 6 条（起本地 HttpServer：完整包通过、短包被拒且删除、
+      非压缩包被拒、旧包清理、ABI 选择、安装结果翻译）；全套 **149 个测试通过**。
+

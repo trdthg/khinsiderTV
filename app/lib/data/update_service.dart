@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -11,6 +12,42 @@ import 'package:path_provider/path_provider.dart';
 /// the running app version. Pure data — UI decides how to present it.
 class UpdateService {
   UpdateService({required this.repoSlug});
+
+  final _installResults = StreamController<InstallResult>.broadcast();
+  bool _hostHandlerAttached = false;
+
+  /// What the system installer said about the last attempt. Only Android
+  /// reports back; every other platform needs no installer.
+  Stream<InstallResult> get installResults {
+    // Attached lazily: touching a channel in the constructor would need the
+    // Flutter binding, which plain Dart tests do not have.
+    if (!_hostHandlerAttached && Platform.isAndroid) {
+      _hostHandlerAttached = true;
+      _updateChannel.setMethodCallHandler(_onHostCall);
+    }
+    return _installResults.stream;
+  }
+
+  /// The Android build that matches [abi], or null when the release has no
+  /// per-ABI APK.
+  static UpdateAsset? pickAndroidAsset(List<UpdateAsset> assets, String abi) {
+    if (abi == 'armv7' || abi == 'arm64' || abi == 'x86_64') {
+      for (final a in assets) {
+        if (a.name.contains(abi) && a.name.endsWith('.apk')) return a;
+      }
+    }
+    return null;
+  }
+
+  Future<Object?> _onHostCall(MethodCall call) async {
+    if (call.method != 'installResult') return null;
+    final args = call.arguments;
+    final status = args is Map ? (args['status'] as num?)?.toInt() : null;
+    final message = args is Map ? args['message'] as String? : null;
+    if (status == null) return null;
+    _installResults.add(InstallResult(status, message));
+    return null;
+  }
 
   /// e.g. `trdthg/khinsiderTV`
   final String repoSlug;
@@ -48,9 +85,10 @@ class UpdateService {
       for (final a in rawAssets) {
         if (a is Map<String, dynamic>) {
           final name = a['name'] as String?;
+          final size = (a['size'] as num?)?.toInt() ?? 0;
           final download = a['browser_download_url'] as String?;
           if (name != null && download != null) {
-            assets.add(UpdateAsset(name: name, url: download));
+            assets.add(UpdateAsset(name: name, url: download, size: size));
           }
         }
       }
@@ -64,9 +102,35 @@ class UpdateService {
     );
   }
 
+  /// The ABI of the installed Android app, cached. Fetched once at startup so
+  /// the UI can show which package an update will fetch before the user taps.
+  String? _abi;
+
+  String? get androidAbiNow => _abi;
+
+  /// Asks the Android host which ABI this installation runs (armv7 / arm64 /
+  /// x86_64), so the update downloads the 17MB per-ABI APK instead of the 37MB
+  /// universal one — on a TV, half the bytes is half the ways to go wrong.
+  Future<String> androidAbi() async {
+    if (_abi != null) return _abi!;
+    if (!Platform.isAndroid) return _abi = 'universal';
+    try {
+      _abi =
+          await _updateChannel.invokeMethod<String>('androidAbi') ??
+          'universal';
+    } on PlatformException {
+      _abi = 'universal';
+    }
+    return _abi!;
+  }
+
   /// Picks the right asset for the current desktop platform.
   /// Returns null on platforms without auto-download (mobile: keep "View").
-  UpdateAsset? assetForPlatform(List<UpdateAsset> assets) {
+  UpdateAsset? assetForPlatform(
+    List<UpdateAsset> assets, {
+    String? androidAbi,
+  }) {
+    final abi = androidAbi ?? _abi;
     if (Platform.isWindows) {
       for (final a in assets) {
         if (a.name.contains('windows') && a.name.endsWith('.zip')) return a;
@@ -83,6 +147,9 @@ class UpdateService {
       }
     }
     if (Platform.isAndroid) {
+      // The per-ABI build first: same app, half the download.
+      final exact = abi == null ? null : pickAndroidAsset(assets, abi);
+      if (exact != null) return exact;
       for (final a in assets) {
         if (a.name.endsWith('-universal.apk')) return a;
       }
@@ -108,8 +175,48 @@ class UpdateService {
         if (total > 0 && onProgress != null) onProgress(received / total);
       },
     );
+    await _verifyDownload(file, asset);
     return file;
   }
+
+  /// Refuses to hand a corrupt file to the installer, which only ever says
+  /// "this package appears to be invalid" and leaves the user guessing.
+  ///
+  /// A truncated response is the classic cause on a TV: the write succeeds and
+  /// the byte count silently falls short.
+  static Future<void> _verifyDownload(File file, UpdateAsset asset) async {
+    final actual = await file.length();
+    if (asset.size > 0 && actual != asset.size) {
+      await _discard(file);
+      throw LanFreeUpdateException(
+        '下载不完整（${_mb(actual)} / ${_mb(asset.size)}），已删除，请重试',
+      );
+    }
+    if (actual < 4) {
+      await _discard(file);
+      throw const LanFreeUpdateException('下载的文件是空的，请重试');
+    }
+    // An APK (and every zip) starts with the local file header signature.
+    final head = await file
+        .openRead(0, 4)
+        .fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk));
+    if (head.length < 4 ||
+        head[0] != 0x50 ||
+        head[1] != 0x4b ||
+        head[2] != 0x03 ||
+        head[3] != 0x04) {
+      await _discard(file);
+      throw const LanFreeUpdateException('下载到的不是安装包（内容损坏），已删除，请重试');
+    }
+  }
+
+  static Future<void> _discard(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  static String _mb(int bytes) => '${(bytes / 1048576).toStringAsFixed(1)} MB';
 
   /// Deletes previously downloaded installers of the same kind, so a TV with
   /// very little free space is not asked to hold two 40 MB APKs. Directories
@@ -221,11 +328,59 @@ class UpdateInfo {
   final List<UpdateAsset> assets;
 }
 
+/// The system installer's verdict, forwarded from the Android host.
+///
+/// The constants are `PackageInstaller.STATUS_*`; they are duplicated here
+/// because the app has no dependency on the Android SDK.
+class InstallResult {
+  const InstallResult(this.status, this.message);
+
+  /// -1 waiting for the user, 0 success, 1..7 failures.
+  final int status;
+  final String? message;
+
+  bool get succeeded => status == 0;
+
+  /// True while the system is waiting for the user to confirm the install.
+  bool get pendingUserAction => status == -1;
+
+  /// True when the OS blocked it, which is almost always the missing "install
+  /// unknown apps" grant.
+  bool get blocked => status == 2;
+
+  /// Enough to tell the user what to do next.
+  String get explanation => switch (status) {
+    -1 => '等待你在系统界面上确认安装',
+    0 => '安装完成',
+    1 => '安装失败：${message ?? '系统没有给出原因'}',
+    2 => '系统阻止了安装，通常是「安装未知应用」没有允许',
+    3 => '安装被取消',
+    4 => '安装包无效（下载可能不完整），请重试',
+    5 => '已安装的版本与安装包冲突：签名不同，需要先卸载旧版本',
+    6 => '设备存储空间不足，请先清理空间',
+    7 => '安装包与这台设备不兼容',
+    _ => '安装失败（$status）：${message ?? '未知原因'}',
+  };
+}
+
+/// Raised when a downloaded file fails its integrity check.
+class LanFreeUpdateException implements Exception {
+  const LanFreeUpdateException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class UpdateAsset {
-  const UpdateAsset({required this.name, required this.url});
+  const UpdateAsset({required this.name, required this.url, this.size = 0});
 
   final String name;
   final String url;
+
+  /// Size in bytes as reported by the GitHub API; 0 when unknown. Used to
+  /// verify that the download really arrived in one piece.
+  final int size;
 }
 
 /// Walks up from [exePath] to the enclosing `.app` bundle, or null when the

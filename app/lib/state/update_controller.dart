@@ -15,6 +15,12 @@ class UpdateController extends Notifier<UpdateState> {
 
   @override
   UpdateState build() {
+    final service = ref.watch(updateServiceProvider);
+    // Learn the ABI up front so the settings row can name the exact package
+    // ("armv7" vs "universal") before anything is downloaded.
+    unawaited(service.androidAbi());
+    final results = service.installResults.listen(_onInstallResult);
+    ref.onDispose(results.cancel);
     // One silent check per launch. Nothing pops up; Settings shows the result
     // and the settings button gets a dot when there is something to install.
     // Deferred: reading/writing state must happen after build() returns.
@@ -60,8 +66,11 @@ class UpdateController extends Notifier<UpdateState> {
       return;
     }
     final service = ref.read(updateServiceProvider);
+    // Android: ask which ABI this installation runs before choosing, so a TV
+    // downloads the 17MB armv7 build instead of the 37MB universal one.
+    if (Platform.isAndroid) await service.androidAbi();
     final asset = service.assetForPlatform(info.assets);
-    if (asset == null) return; // mobile: banner keeps the View link
+    if (asset == null) return; // mobile: the release page link stays
 
     state = state.copyWith(
       downloadPhase: UpdateDownloadPhase.downloading,
@@ -93,7 +102,7 @@ class UpdateController extends Notifier<UpdateState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         downloadPhase: UpdateDownloadPhase.failed,
-        errorMessage: 'Download failed: $e',
+        errorMessage: '下载失败：$e',
       );
       return;
     }
@@ -114,7 +123,7 @@ class UpdateController extends Notifier<UpdateState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         downloadPhase: UpdateDownloadPhase.failed,
-        errorMessage: 'Extract failed: $e',
+        errorMessage: '解压失败：$e',
       );
     }
   }
@@ -167,6 +176,28 @@ class UpdateController extends Notifier<UpdateState> {
       if (!ref.mounted) return;
       state = state.copyWith(installError: '打开安装界面失败：$e');
     }
+  }
+
+  /// The installer reports back after the session is committed; that verdict is
+  /// the only way to know *why* an install was refused (bad signature, no
+  /// space, blocked by the OS, ...).
+  void _onInstallResult(InstallResult result) {
+    if (!ref.mounted) return;
+    if (result.succeeded) {
+      state = state.copyWith(installError: null, installNeedsPermission: false);
+      return;
+    }
+    if (result.pendingUserAction) {
+      state = state.copyWith(
+        installError: '已交给系统安装器，请在系统界面上确认',
+        installNeedsPermission: false,
+      );
+      return;
+    }
+    state = state.copyWith(
+      installError: result.explanation,
+      installNeedsPermission: result.blocked,
+    );
   }
 
   /// Opens the Android setting that [installDownloaded] is waiting for.
