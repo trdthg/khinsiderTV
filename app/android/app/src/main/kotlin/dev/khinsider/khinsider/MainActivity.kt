@@ -42,6 +42,11 @@ class MainActivity : AudioServiceActivity() {
     private var updateChannel: MethodChannel? = null
     private var installReceiver: BroadcastReceiver? = null
 
+    // The session we are waiting on, so the confirmation UI can be shown and
+    // the session abandoned if it cannot be.
+    private var pendingSessionId = 0
+    private var pendingApk: File? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // The TV search field: a real EditText, because Flutter's own text input
@@ -84,31 +89,7 @@ class MainActivity : AudioServiceActivity() {
                         }
                     }
                     try {
-                        val uri = FileProvider.getUriForFile(
-                            this,
-                            "$packageName.fileprovider",
-                            file,
-                        )
-                        val view = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        // Most launchers/TVs handle ACTION_VIEW for an APK, but a
-                        // plain Android TV image may only have the package
-                        // installer, which also answers ACTION_INSTALL_PACKAGE.
-                        val intent =
-                            if (view.resolveActivity(packageManager) != null) {
-                                view
-                            } else {
-                                Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-                                    data = uri
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-                                }
-                            }
-                        if (intent.resolveActivity(packageManager) == null) {
+                        if (!installViaIntent(file)) {
                             result.error(
                                 "no_installer",
                                 "No activity can install an APK on this device",
@@ -116,7 +97,6 @@ class MainActivity : AudioServiceActivity() {
                             )
                             return@setMethodCallHandler
                         }
-                        startActivity(intent)
                         result.success("intent")
                     } catch (e: Exception) {
                         result.error("install_failed", e.message, null)
@@ -411,6 +391,77 @@ class MainActivity : AudioServiceActivity() {
     }
 
     /** Streams [file] into a package-installer session and commits it. */
+    /**
+     * The old hand-off: let whatever the device has (package installer, file
+     * manager) install [file] from a content:// URI. Used when a session
+     * cannot be started, and as the fallback when the system's confirmation
+     * UI cannot be shown.
+     */
+    private fun installViaIntent(file: File): Boolean {
+        val uri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            file,
+        )
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        // Most launchers/TVs handle ACTION_VIEW for an APK, but a plain
+        // Android TV image may only have the package installer, which also
+        // answers ACTION_INSTALL_PACKAGE.
+        val intent =
+            if (view.resolveActivity(packageManager) != null) {
+                view
+            } else {
+                Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                    data = uri
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                }
+            }
+        if (intent.resolveActivity(packageManager) == null) return false
+        startActivity(intent)
+        return true
+    }
+
+    /**
+     * Shows the system's "install this app?" confirmation for a session that
+     * reported STATUS_PENDING_USER_ACTION.
+     *
+     * Android 12 changed what that extra holds: it used to be an Intent, and
+     * from API 31 it is a PendingIntent. Asking for only the Intent silently
+     * got null, no dialog ever appeared, and the session then died as
+     * STATUS_FAILURE_ABORTED — which the app could only report as "install
+     * cancelled". Both shapes are handled here.
+     */
+    private fun launchInstallConfirmation(result: Intent): Boolean {
+        @Suppress("DEPRECATION")
+        val extra: android.os.Parcelable? =
+            result.getParcelableExtra(Intent.EXTRA_INTENT)
+        if (extra == null) return false
+        return runCatching {
+            when (extra) {
+                is PendingIntent -> extra.send()
+                is Intent -> {
+                    extra.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(extra)
+                }
+                else -> return false
+            }
+        }.isSuccess
+    }
+
+    private fun abandonPendingSession() {
+        val id = pendingSessionId
+        pendingSessionId = 0
+        pendingApk = null
+        if (id == 0) return
+        runCatching { packageManager.packageInstaller.abandonSession(id) }
+    }
+
     private fun startInstallSession(file: File) {
         val installer = packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(
@@ -434,6 +485,8 @@ class MainActivity : AudioServiceActivity() {
                     }
                 )
             val pending = PendingIntent.getBroadcast(this, sessionId, callback, flags)
+            pendingSessionId = sessionId
+            pendingApk = file
             session.commit(pending.intentSender)
         }
     }
@@ -456,12 +509,21 @@ class MainActivity : AudioServiceActivity() {
                 // The session API asks the caller to show the confirmation UI
                 // itself; without this the install silently waits forever.
                 if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                    @Suppress("DEPRECATION")
-                    val confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT) as? Intent
-                    if (confirm != null) {
-                        confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        runCatching { (context ?: this@MainActivity).startActivity(confirm) }
+                    if (!launchInstallConfirmation(intent)) {
+                        // No dialog could be shown, so the session would just sit
+                        // there until the system aborts it. Hand the file to the
+                        // ordinary installer instead of leaving the user with an
+                        // "install cancelled" they cannot act on.
+                        val apk = pendingApk
+                        abandonPendingSession()
+                        if (apk != null && apk.exists()) {
+                            runCatching { installViaIntent(apk) }
+                        }
                     }
+                } else {
+                    // Any other status is final for this session.
+                    pendingSessionId = 0
+                    pendingApk = null
                 }
                 updateChannel?.invokeMethod(
                     "installResult",

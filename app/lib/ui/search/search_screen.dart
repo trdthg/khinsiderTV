@@ -6,6 +6,7 @@ import 'package:khinsider_api/khinsider_api.dart';
 
 import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
+import '../../core/widgets/dpad_nav.dart';
 import '../../data/preferences_store.dart';
 import '../../state/search_controller.dart';
 import '../../state/update_controller.dart';
@@ -414,40 +415,46 @@ class _AlbumRow extends ConsumerWidget {
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,
             separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, i) => SizedBox(
-              width: 140,
-              child: DpadTile(
-                autofocus: i == 0,
-                onSelect: () => Navigator.pushNamed(
-                  context,
-                  '/album',
-                  arguments: albums[i],
-                ),
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: albums[i].imageUrl != null
-                            ? CachedNetworkImage(
-                                // `imageUrl`, not `thumbUrl`: the search page
-                                // only hands out a 60×60 file.
-                                imageUrl: albums[i].imageUrl!,
-                                fit: BoxFit.cover,
-                              )
-                            : const Icon(Icons.album, size: 48),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Text(
-                          albums[i].title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+            itemBuilder: (context, i) => DpadNav(
+              // A horizontal row stops at its own ends: pressing Right on the
+              // last card used to hand the focus to the row underneath.
+              stopLeft: i == 0,
+              stopRight: i == albums.length - 1,
+              child: SizedBox(
+                width: 140,
+                child: DpadTile(
+                  autofocus: i == 0,
+                  onSelect: () => Navigator.pushNamed(
+                    context,
+                    '/album',
+                    arguments: albums[i],
+                  ),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: albums[i].imageUrl != null
+                              ? CachedNetworkImage(
+                                  // `imageUrl`, not `thumbUrl`: the search page
+                                  // only hands out a 60×60 file.
+                                  imageUrl: albums[i].imageUrl!,
+                                  fit: BoxFit.cover,
+                                )
+                              : const Icon(Icons.album, size: 48),
                         ),
-                      ),
-                    ],
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Text(
+                            albums[i].title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

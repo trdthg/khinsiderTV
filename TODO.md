@@ -879,3 +879,34 @@
 真正的「一键下载整张专辑（不用播放）」是新功能：每首都要先解析直链，而 KHInsider 不能猛刷，
 所以要有限速 + 进度界面 + 取消。等用户决定要不要做。
 
+## X. 未发布：安装 session 的确认框 + 横向行两端越界
+
+用户反馈：① 安卓更新又坏了，下载完显示「安装取消」；② 收藏行走到最后一张卡再按右键会跳到 recently viewed。
+
+### X1 「安装取消」= STATUS_FAILURE_ABORTED
+
+`STATUS_PENDING_USER_ACTION` 的意思是「会话在等我们弹出系统确认框」，而 `PackageInstaller.EXTRA_INTENT`
+这个 extra 的类型变过：**Android 12（API 31）起它是 `PendingIntent`，之前才是 `Intent`**。我们只写了
+`getParcelableExtra(EXTRA_INTENT) as? Intent` —— 在电视上（Android 12+）永远取到 null，于是确认框从来不弹，
+会话干等到被系统判成 aborted，应用能报的只有「安装被取消」。
+
+- [x] `launchInstallConfirmation()` 同时接受 `PendingIntent`（`send()`）和 `Intent`（`startActivity`）。
+- [x] 如果两者都打不开（或抛异常），就 `abandonSession()` 并退回 `installViaIntent()`（content:// + ACTION_VIEW）
+      —— 宁可退回老路，也不把用户丢在一个注定 aborted 的会话上。
+- [x] 记录进行中的 `pendingSessionId` / `pendingApk`，任何终结状态都清掉。
+- [x] status 3 的文案改成「系统的安装确认界面没有完成」并附上系统给的 message，下次再出问题能直接看到原因。
+- [x] 把那段 content:// 兜底抽成 `installViaIntent(file): Boolean`，`installApk` 和 receiver 共用。
+- 注意：这个修复只有**装上新版本之后**才生效 —— 旧版本（v0.3.0）里的安装逻辑是坏的，所以它没法用应用内更新
+  把自己升上来，仍然需要手动装一次。
+
+### X2 横向行两端不该把焦点漏出去
+
+`_AlbumRow`（收藏 / 最近浏览）和相关专辑那一行都是横向 `ListView`/`GridView`，每张卡是一个 `DpadTile`，
+没有任何显式的方向邻居，于是默认几何遍历在最后一张卡按右键时「就近」把焦点交给了下一行的卡片。
+
+- [x] `DpadNav` 新增 `stopUp/stopDown/stopLeft/stopRight`：该方向没有显式目标且标了 stop 时，直接
+      `KeyEventResult.handled` 把键吃掉（有目标仍然是「跳过去」优先）。
+- [x] 收藏/最近浏览行的每张卡包一层 `DpadNav(stopLeft: i == 0, stopRight: i == 最后一页)`；相关专辑同理。
+- [x] 新增 `test/dpad_nav_test.dart`：行尾按右键焦点不动；对照组（不带 stop 参数）确认「会漏到下一行」，
+      所以这个回归测试抓的确实是那个行为。
+

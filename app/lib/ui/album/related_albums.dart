@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import '../../core/widgets/dpad_tile.dart';
+import '../../core/widgets/dpad_nav.dart';
 import '../../data/preferences_store.dart';
 
 /// "People who viewed this also viewed" — horizontally scrolling grid with
@@ -80,42 +81,48 @@ class RelatedAlbumsRow extends ConsumerWidget {
                           itemCount: albums.length,
                           itemBuilder: (context, i) {
                             final album = albums[i];
-                            return DpadTile(
-                              autofocus: false,
-                              onSelect: () {
-                                ref
-                                    .read(recentAlbumsProvider.notifier)
-                                    .record(album);
-                                Navigator.pushNamed(
-                                  context,
-                                  '/album',
-                                  arguments: album,
-                                );
-                              },
-                              child: Card(
-                                margin: EdgeInsets.zero,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(
-                                      child: album.imageUrl == null
-                                          ? const Icon(Icons.album, size: 40)
-                                          : CachedNetworkImage(
-                                              imageUrl: album.imageUrl ?? '',
-                                              fit: BoxFit.cover,
-                                            ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Text(
-                                        album.title,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.bodySmall,
+                            return DpadNav(
+                              // The track list's tail stops at its own
+                              // horizontal ends for the same reason.
+                              stopLeft: i == 0,
+                              stopRight: i == albums.length - 1,
+                              child: DpadTile(
+                                autofocus: false,
+                                onSelect: () {
+                                  ref
+                                      .read(recentAlbumsProvider.notifier)
+                                      .record(album);
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/album',
+                                    arguments: album,
+                                  );
+                                },
+                                child: Card(
+                                  margin: EdgeInsets.zero,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: album.imageUrl == null
+                                            ? const Icon(Icons.album, size: 40)
+                                            : CachedNetworkImage(
+                                                imageUrl: album.imageUrl ?? '',
+                                                fit: BoxFit.cover,
+                                              ),
                                       ),
-                                    ),
-                                  ],
+                                      Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        child: Text(
+                                          album.title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
