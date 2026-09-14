@@ -45,6 +45,45 @@ class LanSyncResult {
 
 typedef JsonMap = Map<String, Object?>;
 
+/// What a one-tap connection test found.
+///
+/// The two halves are reported separately on purpose: discovery (UDP) working
+/// while the API (TCP) does not is a firewall or a router's client isolation,
+/// and knowing that is the difference between "your network blocks it" and
+/// "the other app went away".
+class LanPeerDiagnosis {
+  const LanPeerDiagnosis({
+    required this.udp,
+    required this.tcp,
+    this.port,
+    this.version = '',
+    this.favorites = 0,
+  });
+
+  final bool udp;
+  final bool tcp;
+  final int? port;
+  final String version;
+  final int favorites;
+
+  bool get ok => udp && tcp;
+
+  String describe(String name) {
+    final at = port == null
+        ? ''
+        : '（端口 $port${version.isEmpty ? '' : '，v$version'}）';
+    if (!udp) {
+      return '$name 的地址探测没有回应$at：对方可能已经退出、不在同一个网络里，'
+          '或者路由器把 UDP 也挡了。';
+    }
+    if (!tcp) {
+      return '$name 的地址探测有回应$at，但连不上它的 API：对方的防火墙、'
+          '路由器的客户端隔离挡住了 TCP，或者对方的应用刚被系统挂起。';
+    }
+    return '$name 一切正常$at，收藏 $favorites 张。';
+  }
+}
+
 /// LAN discovery + the small HTTP API this app's devices use to talk to each
 /// other. No plugin, no cloud, no account: every device broadcasts a UDP
 /// beacon, answers the same broadcast from others, and then speaks plain HTTP
@@ -192,6 +231,48 @@ class LanService {
       try {
         socket.send(probe, target, discoveryPort);
       } catch (_) {}
+    }
+  }
+
+  /// This device's own address on the LAN, so the user can compare it with
+  /// what the other side shows (and tell "same network" from "not same
+  /// network" without guessing).
+  Future<String?> localAddress() async {
+    try {
+      for (final interface in await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      )) {
+        for (final address in interface.addresses) {
+          return address.address;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Probes [peer] and then calls its API: one tap instead of a guess.
+  Future<LanPeerDiagnosis> diagnose(LanDevice peer) async {
+    final answered = await _probeHost(peer.host);
+    final fresh = _devices[peer.id] ?? answered;
+    if (fresh == null) return const LanPeerDiagnosis(udp: false, tcp: false);
+    try {
+      final info = await _requestOnce(fresh, 'GET', '/kh/info');
+      return LanPeerDiagnosis(
+        udp: true,
+        tcp: true,
+        port: fresh.port,
+        version: info['v'] as String? ?? fresh.version,
+        favorites: info['fav'] as int? ?? fresh.favorites,
+      );
+    } catch (_) {
+      return LanPeerDiagnosis(
+        udp: true,
+        tcp: false,
+        port: fresh.port,
+        version: fresh.version,
+        favorites: fresh.favorites,
+      );
     }
   }
 
@@ -574,8 +655,9 @@ class LanService {
           '分配端口，对方可能刚重启过）。';
     }
     if (text.contains('timed out') || text.contains('timeout')) {
-      return '\n对方没有回应 TCP：典型原因是对方的防火墙，或者路由器的"客户端'
-          '隔离"（AP 隔离）—— UDP 广播能通、TCP 连不上就是这个特征。';
+      return '\n对方没有回应 TCP：对方的应用可能已经不在前台（被系统挂起），'
+          '也可能是防火墙或路由器的"客户端隔离"（AP 隔离）—— UDP 能通、TCP 不通'
+          '正是这两种情况的特征。请在两边都打开这个页面再试。';
     }
     return '';
   }
@@ -586,6 +668,20 @@ class LanService {
     String path, {
     Map<String, Object?>? payload,
   }) async {
+    if (peer.port == 0) {
+      // A peer whose HTTP port is unknown (an address added by hand, or a
+      // beacon from a version that did not advertise one) can only be reached
+      // after asking: `http://host:0` fails immediately and then looks like a
+      // network problem when it is nothing of the sort.
+      final resolved = await _probeHost(peer.host);
+      if (resolved == null) {
+        throw LanException(
+          '连不上 ${peer.name}（${peer.host}）：它的地址还没有确认，'
+          '地址探测也没有回应。请让对方的应用保持运行，并确认两台设备在同一个网络里。',
+        );
+      }
+      peer = _devices[peer.id] ?? resolved;
+    }
     try {
       return await _requestOnce(peer, method, path, payload: payload);
     } on LanException {

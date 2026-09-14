@@ -471,4 +471,74 @@ void main() {
     expect(peer.port, 45678);
     expect(peer.favorites, 3);
   });
+
+  test('a failed test connection says which half failed', () {
+    const silent = LanPeerDiagnosis(udp: false, tcp: false);
+    expect(silent.ok, isFalse);
+    expect(silent.describe('TV'), contains('地址探测没有回应'));
+
+    const tcpBlocked = LanPeerDiagnosis(udp: true, tcp: false, port: 41234);
+    expect(tcpBlocked.describe('TV'), contains('41234'));
+    expect(tcpBlocked.describe('TV'), contains('客户端隔离'));
+
+    const fine = LanPeerDiagnosis(
+      udp: true,
+      tcp: true,
+      port: 4321,
+      version: '0.3.3',
+      favorites: 12,
+    );
+    expect(fine.ok, isTrue);
+    expect(fine.describe('TV'), contains('一切正常'));
+    expect(fine.describe('TV'), contains('12'));
+  });
+
+  test('diagnose reports UDP alive and TCP dead without a server', () async {
+    // The peer is learned from a pong, then asked over HTTP - the split the
+    // user needs, because the two failures have different fixes.
+    final service = LanService(
+      deviceId: 'aaaaaaaa',
+      deviceName: 'Device A',
+      appVersion: '0.3.3',
+      discoveryPort: 41260,
+      readFavorites: () async => const [],
+      mergeFavorites: (incoming) async => (added: 0, total: 0),
+      replaceFavorites: (incoming) async => (added: 0, total: 0),
+    );
+    await service.start();
+    final fake = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+    // A port nothing listens on, so the HTTP half must fail.
+    final dead = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final deadPort = dead.port;
+    dead.close();
+    addTearDown(() async {
+      await service.stop();
+      fake.close();
+    });
+
+    final appeared = service.deviceStream
+        .firstWhere((devices) => devices.any((d) => d.id == 'peer-2'))
+        .timeout(const Duration(seconds: 3));
+    fake.send(
+      utf8.encode(
+        jsonEncode({
+          'kh': 'pong',
+          'id': 'peer-2',
+          'name': 'Peer',
+          'v': '0.3.3',
+          'port': deadPort,
+          'fav': 0,
+        }),
+      ),
+      InternetAddress.loopbackIPv4,
+      service.discoveryPort,
+    );
+    await appeared;
+
+    final peer = service.devices.singleWhere((d) => d.id == 'peer-2');
+    final result = await service.diagnose(peer);
+    expect(result.udp, isTrue);
+    expect(result.tcp, isFalse);
+    expect(result.port, deadPort);
+  });
 }

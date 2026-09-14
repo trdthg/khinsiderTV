@@ -26,6 +26,8 @@ class LanState {
     this.busy = false,
     this.status,
     this.error,
+    this.localAddress,
+    this.localPort,
   });
 
   /// This device, as others see it.
@@ -46,6 +48,10 @@ class LanState {
   final String? status;
   final String? error;
 
+  /// This device's own address, for comparing the two ends of a sync.
+  final String? localAddress;
+  final int? localPort;
+
   static const _unset = Object();
 
   LanState copyWith({
@@ -57,6 +63,8 @@ class LanState {
     bool? busy,
     Object? status = _unset,
     Object? error = _unset,
+    Object? localAddress = _unset,
+    Object? localPort = _unset,
   }) => LanState(
     deviceId: deviceId,
     name: name ?? this.name,
@@ -67,6 +75,12 @@ class LanState {
     busy: busy ?? this.busy,
     status: identical(status, _unset) ? this.status : status as String?,
     error: identical(error, _unset) ? this.error : error as String?,
+    localAddress: identical(localAddress, _unset)
+        ? this.localAddress
+        : localAddress as String?,
+    localPort: identical(localPort, _unset)
+        ? this.localPort
+        : localPort as int?,
   );
 }
 
@@ -156,8 +170,16 @@ class LanController extends AsyncNotifier<LanState> {
           // A saved address that is not there right now is normal.
         }
       }
+      final local = await service.localAddress();
       if (!ref.mounted) return;
-      _patch((s) => s.copyWith(running: true, error: null));
+      _patch(
+        (s) => s.copyWith(
+          running: true,
+          error: null,
+          localAddress: local,
+          localPort: service.httpPort,
+        ),
+      );
     } catch (e) {
       if (!ref.mounted) return;
       _patch((s) => s.copyWith(running: false, error: '$e'));
@@ -183,6 +205,29 @@ class LanController extends AsyncNotifier<LanState> {
     } else {
       await _stop();
     }
+  }
+
+  /// Probes one device and then calls its API, and says which half worked.
+  /// This is the answer to "it says it cannot connect", and it names the fix.
+  Future<void> testConnection(LanDevice device) async {
+    final service = _service;
+    if (service == null) {
+      _patch((s) => s.copyWith(error: '局域网服务没有在运行'));
+      return;
+    }
+    _patch(
+      (s) =>
+          s.copyWith(busy: true, status: '正在测试 ${device.name}…', error: null),
+    );
+    final result = await service.diagnose(device);
+    if (!ref.mounted) return;
+    _patch(
+      (s) => s.copyWith(
+        busy: false,
+        status: result.describe(device.name),
+        error: result.ok ? null : ' ',
+      ),
+    );
   }
 
   /// Re-broadcast the discovery probe.

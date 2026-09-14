@@ -185,6 +185,16 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                                   ),
                                 ),
                               const SizedBox(height: 10),
+                              if (state.localAddress != null)
+                                Text(
+                                  '本机地址：${state.localAddress}'
+                                  '${state.localPort == null ? '' : ':${state.localPort}'}'
+                                  ' —— 两台设备要在同一个网络，且对方的应用还在运行。',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              const SizedBox(height: 6),
                               Text(
                                 '普通同步只做「合并」：两边都没有的专辑会补上，'
                                 '已有的收藏都不会被删除。\n'
@@ -234,6 +244,12 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         },
       ),
       if (expanded) ...[
+        SettingsRow(
+          icon: Icons.wifi_tethering,
+          title: '测试连接',
+          subtitle: '只探测这台设备，不改动任何收藏',
+          onSelect: state.busy ? null : () => notifier.testConnection(device),
+        ),
         SettingsRow(
           icon: Icons.upload,
           title: '把本机收藏发送到 ${device.name}',
