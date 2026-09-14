@@ -637,3 +637,25 @@
 - 没写测试的两条：N4（宽屏退出专辑的 `stop()`）和 N3 的「播完自动循环」需要真实
   构造 completed 快照 / 有下级路由的 Navigator，测试里搭建成本高，先在真机上验。
 
+## O. 第十二轮：TV 改回系统输入法
+
+- [x] **O1 用户反馈**：`我希望键盘还是用原生键盘吧?`（第十一轮刚把自绘键盘补上大写/符号）。
+      结论：TV 默认走**系统 IME**，自绘键盘降级为后备，两种模式可切换、可持久化。
+- 改动：
+  - `TvKeyboardMode { system, builtin }` + `tvKeyboardModeProvider`（存在 `khinsider_store.json`
+    的 `tv_keyboard_mode`，默认 `system`，老用户没有这个键 ⇒ 也是 `system`）。
+  - 搜索框：`readOnly: builtinKeyboard`、`autofocus: !builtinKeyboard` —— 系统 IME 模式下就是普通
+    可编辑输入框，进入页面聚焦即弹出 Android TV 自带键盘（方向键可用）。
+  - 搜索框**左侧**新增键盘按钮（仅 TV，`DpadIconButton`，`filled` 表示当前用的是自绘键盘）：
+    一键切换两种输入法。从输入框按「左」（光标已在开头）聚焦它，按「右」回到输入框 ——
+    遥控器永远够得着后备键盘。
+  - 系统 IME 模式下按「确定/Select」会让 `TextInput.show` 重新弹出键盘：`TextField` 只在获得焦点时
+    请求 IME，Back 关掉之后字段从没失去焦点，就再也不会请求了（`EditableText` 没有公开 API，
+    这里发的是框架内部同一条消息）。
+  - `PopScope(canPop: ...)` 只在**自绘键盘打开**时拦返回键；系统 IME 模式下 Android 自己会用第一次
+    Back 关掉 IME，所以不能再拦 pop。
+- 回归测试（`test/tv_search_test.dart`，pump 多了一个 `mode` 参数，默认 `builtin` 给老用例）：
+  默认 TV 不渲染 `TvKeyboard`、字段可编辑、`testTextInput.isVisible`；按钮来回切换两种模式；
+  Select 能把 IME 叫回来；「左」聚焦到键盘按钮、「右」回到输入框。
+- 待真机确认：某些 TV box 可能压根没装 IME —— 那时按「左」→ 键盘按钮 → 切回自绘键盘即可。
+

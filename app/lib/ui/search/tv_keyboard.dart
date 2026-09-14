@@ -3,20 +3,22 @@ import 'package:flutter/services.dart';
 
 import '../../core/widgets/dpad_tile.dart';
 
-/// The on-screen keyboard the TV layouts type with.
+/// The app's own on-screen keyboard — the **fallback** TV input method.
 ///
-/// Android TV shows a system IME for a focused text field, but **a remote can
-/// never reach it from a Flutter app**: the D-pad down that should hand focus to
-/// the IME window is consumed by the framework first (`WidgetsApp`'s default
-/// shortcuts traverse focus, `DefaultTextEditingShortcuts` move the caret), so
-/// the key never reaches Android's window manager. The keyboard stayed on
-/// screen, unnavigable, and whether it appeared at all depended on the system's
-/// own IME timing (it does not come back for a field that never lost focus).
+/// TVs use the system IME by default (`TvKeyboardMode.system`): Android TV's
+/// keyboard is D-pad navigable and is what the user asked for. This widget is
+/// the escape hatch for the cases where that fails — a box whose IME cannot be
+/// driven from a Flutter text field (the D-pad that should hand focus to the
+/// IME window is consumed by the framework first: `WidgetsApp`'s default
+/// shortcuts traverse focus, `DefaultTextEditingShortcuts` move the caret), or
+/// a remote that simply cannot reach it. The search screen's keyboard button
+/// switches between the two, and the choice is persisted.
 ///
-/// So TVs do not open the system IME at all (the field is read-only there) and
-/// type with this instead: a D-pad navigable grid of keys that writes into the
-/// field's controller. Nothing here is phone/desktop code — those layouts keep
-/// the ordinary editable field.
+/// When this is active the field is read-only, so no input connection is ever
+/// created and the system IME can never appear behind the panel: a D-pad
+/// navigable grid of keys writes into the field's controller instead. Nothing
+/// here is phone/desktop code — those layouts keep the ordinary editable
+/// field.
 ///
 /// The arrows are handled here rather than left to Flutter's directional focus
 /// traversal: that walks the widget tree by geometry, and on a real TV window

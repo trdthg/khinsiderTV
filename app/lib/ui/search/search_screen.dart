@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,9 +15,12 @@ import 'tv_keyboard.dart';
 /// Search screen: text field + responsive album grid (list on narrow /
 /// portrait layouts, grid on TV / landscape).
 ///
-/// TVs cannot use the system IME (see [TvKeyboard]), so there the field is
-/// read-only and a D-pad navigable keyboard is shown instead — open on entry,
-/// because a remote has no other way to type.
+/// TVs type with the system IME by default, exactly like every other platform:
+/// the field is a normal editable field, focused on entry so Android TV's own
+/// (D-pad navigable) keyboard comes up. The app's own D-pad keyboard
+/// ([TvKeyboard]) is kept as a fallback and is one button press away — the
+/// keyboard button in the search bar — for boxes whose IME cannot be driven
+/// from a Flutter text field. The choice is persisted (`TvKeyboardMode`).
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -30,11 +35,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     onKeyEvent: _onSearchKey,
   );
 
-  /// Whether the TV on-screen keyboard is up. Always false off TV.
+  /// Whether the TV's *built-in* keyboard is up. Always false off TV, and
+  /// unused in system-IME mode.
   late bool _keyboardOpen;
 
-  /// Whether this is a TV: the layout that must not touch the system IME.
+  /// Whether this is a TV: the layout whose input method can be switched.
   late final bool _tv;
+
+  /// The keyboard-mode button (TV only), so "left" from the field can reach it.
+  late final FocusNode _keyboardModeFocus = FocusNode(
+    debugLabel: 'tv-keyboard-mode',
+    onKeyEvent: _onKeyboardModeKey,
+  );
+
+  /// True when this TV types with the app's own keyboard, i.e. the field is
+  /// read-only and [TvKeyboard] is up. Everything else (phones, desktops, and a
+  /// TV on the system IME) behaves like a normal editable field.
+  bool get _builtinKeyboard {
+    if (!_tv) return false;
+    final mode =
+        ref.read(tvKeyboardModeProvider).value ?? TvKeyboardMode.system;
+    return mode == TvKeyboardMode.builtin;
+  }
 
   @override
   void initState() {
@@ -49,22 +71,66 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void dispose() {
     _controller.dispose();
     _searchFocus.dispose();
+    _keyboardModeFocus.dispose();
     super.dispose();
   }
 
   void _setKeyboardOpen(bool open, {bool focusField = false}) {
     if (_keyboardOpen == open) return;
     setState(() => _keyboardOpen = open);
-    // Closing the keyboard disposes the focused key, so focus has to be put
-    // somewhere deliberate — otherwise the remote is dead until the user finds
-    // the field again by hand. The field is the right place: it is read-only on
-    // a TV, and Flutter only creates an input connection for it when it is
-    // editable (`EditableText._shouldCreateInputConnection`), so this cannot
-    // bring the system IME back.
+    // Closing the built-in keyboard disposes the focused key, so focus has to
+    // be put somewhere deliberate — otherwise the remote is dead until the user
+    // finds the field again by hand. In this mode the field is read-only, and
+    // Flutter only creates an input connection for an editable one
+    // (`EditableText._shouldCreateInputConnection`), so focusing it here cannot
+    // summon the system IME behind the panel.
     if (!open && focusField && _tv) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _searchFocus.requestFocus();
       });
+    }
+  }
+
+  /// Asks the platform to show the IME for the focused field.
+  ///
+  /// `TextField` only asks when the field *gains* focus, so after the user
+  /// dismisses the IME with Back there is no way back: the field never lost
+  /// focus, so nothing re-requests it. There is no public API for this on
+  /// `EditableText`, so this sends the same message the framework sends when it
+  /// opens a connection.
+  void _showSystemKeyboard() {
+    if (!_tv || _builtinKeyboard) return;
+    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
+  }
+
+  /// Left from the field reaches the keyboard-mode button, so the fallback
+  /// keyboard stays one press away on a remote.
+  KeyEventResult _onKeyboardModeKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _searchFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// True when the caret sits at the very start (or the field was never
+  /// touched), i.e. when "left" has nothing to move inside the text.
+  bool get _caretAtStart {
+    final selection = _controller.selection;
+    return selection.isCollapsed && selection.baseOffset <= 0;
+  }
+
+  /// Switches between the system IME and the built-in keyboard, and moves the
+  /// focus (and the IME) to wherever the new mode types.
+  Future<void> _toggleKeyboardMode() async {
+    await ref.read(tvKeyboardModeProvider.notifier).toggle();
+    if (!mounted) return;
+    if (_builtinKeyboard) {
+      _setKeyboardOpen(true);
+    } else {
+      _searchFocus.requestFocus();
+      _showSystemKeyboard();
     }
   }
 
@@ -91,24 +157,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final key = event.logicalKey;
 
     if (_tv) {
-      // The field is read-only here, so it is both the way back to the keyboard
-      // and the place that has to accept a physical keyboard's characters.
       if (key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.select ||
           key == LogicalKeyboardKey.gameButtonA) {
-        _setKeyboardOpen(true);
+        if (_builtinKeyboard) {
+          // The built-in keyboard was hidden: this is the way back to it.
+          _setKeyboardOpen(true);
+        } else {
+          _showSystemKeyboard();
+        }
         return KeyEventResult.handled;
       }
-      final character = event.character;
-      if (character != null &&
-          character.length == 1 &&
-          character.codeUnitAt(0) >= 0x20) {
-        _append(character);
+      if (key == LogicalKeyboardKey.arrowLeft && _caretAtStart) {
+        _keyboardModeFocus.requestFocus();
         return KeyEventResult.handled;
       }
-      if (key == LogicalKeyboardKey.backspace) {
-        _backspace();
-        return KeyEventResult.handled;
+      if (_builtinKeyboard) {
+        // In this mode the field is read-only, so it is the place that has to
+        // accept a physical keyboard's characters itself.
+        final character = event.character;
+        if (character != null &&
+            character.length == 1 &&
+            character.codeUnitAt(0) >= 0x20) {
+          _append(character);
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.backspace) {
+          _backspace();
+          return KeyEventResult.handled;
+        }
       }
     }
 
@@ -131,26 +208,52 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (preset != null) _controller.text = preset;
     ref.read(searchControllerProvider.notifier).search(_controller.text);
     ref.read(searchHistoryProvider.notifier).record(_controller.text);
-    // The results are the point of pressing Search: hand focus back to them.
-    _setKeyboardOpen(false);
+    // The results are the point of pressing Search: drop the keyboard (the
+    // built-in panel, or the IME) and hand the remote back to them.
+    if (_builtinKeyboard) {
+      _setKeyboardOpen(false);
+    } else if (_tv) {
+      _searchFocus.unfocus();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(searchControllerProvider);
     final narrow = _narrow;
+    final mode =
+        ref.watch(tvKeyboardModeProvider).value ?? TvKeyboardMode.system;
+    final builtinKeyboard = _tv && mode == TvKeyboardMode.builtin;
 
     final searchBar = Padding(
       padding: EdgeInsets.fromLTRB(16, narrow ? 4 : 16, 16, narrow ? 10 : 8),
       child: Row(
         children: [
+          // TV only: switch between the system IME and the app's own keyboard.
+          // Left from the field focuses it (see _onSearchKey), so a remote can
+          // always get back to the fallback if its IME will not cooperate.
+          if (_tv) ...[
+            DpadIconButton(
+              focusNode: _keyboardModeFocus,
+              tooltip: builtinKeyboard
+                  ? 'Use the system keyboard'
+                  : 'Use the built-in keyboard',
+              icon: builtinKeyboard
+                  ? Icons.keyboard_hide_outlined
+                  : Icons.keyboard_outlined,
+              filled: builtinKeyboard,
+              onPressed: _toggleKeyboardMode,
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: TextField(
-              // TVs type with [TvKeyboard]: a Flutter text field can never let
-              // a remote reach the system IME, and that is what the keyboard
-              // below replaces.
-              readOnly: _tv,
-              autofocus: !_tv,
+              // Only the built-in keyboard needs a read-only field: read-only
+              // means no input connection, which is what stops the system IME
+              // from appearing behind the panel. TVs on the system IME (the
+              // default) use an ordinary editable field.
+              readOnly: builtinKeyboard,
+              autofocus: !builtinKeyboard,
               focusNode: _searchFocus,
               controller: _controller,
               textInputAction: TextInputAction.search,
@@ -173,8 +276,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
 
     return PopScope(
-      // On a TV, Back means "hide the keyboard" before it means "leave search".
-      canPop: !(_tv && _keyboardOpen),
+      // With the built-in keyboard up, Back means "hide it" before it means
+      // "leave search". With the system IME, Android dismisses the IME itself
+      // on the first Back, so this must not also swallow the pop.
+      canPop: !(builtinKeyboard && _keyboardOpen),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _setKeyboardOpen(false, focusField: true);
       },
@@ -202,7 +307,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
         if (narrow && !state.hasSearched) const _RecentSearchesStrip(),
         if (narrow) searchBar,
-        if (_tv && _keyboardOpen)
+        if (_builtinKeyboard && _keyboardOpen)
           TvKeyboard(
             onKey: _append,
             onBackspace: _backspace,
