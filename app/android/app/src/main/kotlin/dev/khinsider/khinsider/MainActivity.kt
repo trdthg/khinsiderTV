@@ -388,6 +388,9 @@ class MainActivity : AudioServiceActivity() {
 
     private companion object {
         const val WRITE_EXTERNAL_STORAGE_REQUEST = 4711
+
+        /** Where the system sends the result of a package-installer session. */
+        const val ACTION_INSTALL_RESULT = "dev.khinsider.INSTALL_RESULT"
     }
 
     /**
@@ -479,9 +482,5 @@ class MainActivity : AudioServiceActivity() {
         installReceiver?.let { receiver -> runCatching { unregisterReceiver(receiver) } }
         installReceiver = null
         super.onDestroy()
-    }
-
-    private companion object {
-        const val ACTION_INSTALL_RESULT = "dev.khinsider.INSTALL_RESULT"
     }
 }

@@ -811,4 +811,8 @@
       下载前清掉同扩展名的旧安装包（`pending` 目录等不碰）。
 - [x] **U5 测试**：新增 `update_download_test.dart` 6 条（起本地 HttpServer：完整包通过、短包被拒且删除、
       非压缩包被拒、旧包清理、ABI 选择、安装结果翻译）；全套 **149 个测试通过**。
+- [x] **U6 CI 加固**：v0.2.2 的 build-android 因为我加的 `private companion object` 与类里已有的重复而编译失败
+  （已合并）；同一轮的 build-linux 是 `media_kit_libs_linux` 的「Integrity check failed, please try to rebuild」
+  抖动 —— 给 linux 那步加了一次 `flutter clean` 重试，避免第三方下载抖动把整个 release 卡掉。修复后以 **v0.2.3** 发布
+  （v0.2.2 的 tag 没有对应的 release）。
 
