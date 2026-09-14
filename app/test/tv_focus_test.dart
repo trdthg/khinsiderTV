@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khinsider/core/platform/device.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
 import 'package:khinsider/data/update_service.dart';
 import 'package:khinsider/state/album_controller.dart';
@@ -227,6 +228,62 @@ void main() {
       containsAll(<String>['update-action', 'update-view', 'update-close']),
     );
   });
+  testWidgets('on a TV the update banner takes the remote and gives it back', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          updateControllerProvider.overrideWith(FakeUpdateController.new),
+          isTelevisionProvider.overrideWithValue(true),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const UpdateBanner(),
+                Expanded(
+                  child: Center(
+                    child: DpadTile(
+                      focusNode: FocusNode(debugLabel: 'content'),
+                      onSelect: () {},
+                      child: const Text('content'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    // Nothing can walk into the banner on a real screen (the app navigates by
+    // region, not by geometry), so the banner takes the remote itself.
+    expect(
+      focusedLabel(),
+      'update-action',
+      reason: 'the update button must be selected without hunting for it',
+    );
+
+    // Select actually activates it: the fake moves the phase to downloading.
+    await press(tester, LogicalKeyboardKey.select);
+    await tester.pump();
+    expect(find.text('50%'), findsOneWidget);
+    expect(
+      focusedLabel(),
+      'update-action',
+      reason: 'the ring must survive the phase change',
+    );
+
+    // Down hands the remote back to the content below.
+    await press(tester, LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(focusedLabel(), 'content');
+  });
+
   testWidgets('the remote back in zen mode exits zen and keeps the album', (
     tester,
   ) async {
@@ -264,5 +321,13 @@ class FakeUpdateController extends UpdateController {
   @override
   Future<void> dismiss() async {
     state = state.copyWith(dismissed: true);
+  }
+
+  @override
+  Future<void> download() async {
+    state = state.copyWith(
+      downloadPhase: UpdateDownloadPhase.downloading,
+      downloadProgress: 0.5,
+    );
   }
 }

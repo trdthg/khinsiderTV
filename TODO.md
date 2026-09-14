@@ -659,3 +659,26 @@
   Select 能把 IME 叫回来；「左」聚焦到键盘按钮、「右」回到输入框。
 - 待真机确认：某些 TV box 可能压根没装 IME —— 那时按「左」→ 键盘按钮 → 切回自绘键盘即可。
 
+## P. 第十三轮：Chromecast 上选不中「更新」按钮
+
+- [x] **P1 用户反馈**：`我现在还是无法在 chromecast 上面选中更新按钮..........`
+- 根因（不是按钮没接线，而是**焦点进不去**）：`UpdateBanner` 内部三个按钮用 `DpadNav` 左右串好了，但
+  App 的页面都是**按区域导航**（`skipTraversal` 容器 + 显式 `DpadNav`），Flutter 的几何遍历从搜索框/曲目
+  列表走不到屏幕顶部这一行 —— 提示条在 `Navigator` 之外（`MaterialApp.builder` 的 Column 里），
+  它的焦点节点跟页面不在同一棵子树里，靠箭头「走上去」是靠运气的。旧测试只在一个玩具页面
+  （单个 `DpadTile`）里验证过「Up 能到提示条」，所以一直没暴露。
+- 改动（`lib/ui/shared/update_banner.dart`）：
+  - TV 上提示条**出现时自己接管焦点**：post-frame `_actionFocus.requestFocus()`，并把当时的
+    `primaryFocus` 记到 `_returnFocus`。`_tookFocus` 保证只在出现时抢一次（下载进度刷新不会再把焦点拽回来）。
+  - **按「下」把焦点还回去**（`_restoreFocus()`：优先还给记住的那个节点；节点没了就几何向下；都没有就
+    放行默认遍历）。关闭按钮同理，并且提示条消失时也会还回去 —— 否则遥控器会「死」掉。
+  - 下载中阶段原来把动作位换成纯 `Text`，`_actionFocus` 节点被摘掉 ⇒ 圆环消失、够不到 View/关闭。
+    现在进度用 `DpadTile` 占住同一个位置（`onSelect: () {}`）。
+  - 提示条外层 `Focus(canRequestFocus: false, skipTraversal: true)`：加「下」键处理时引入的容器节点
+    会让几何遍历停在它身上（`focusedLabel()` 变成 `Focus`），旧的「Up 能到提示条」测试立刻抓到了这一点。
+- 测试：`test/tv_focus_test.dart` 新增「TV 上提示条接管焦点 → Select 触发下载（进度变 50%）→ 圆环不消失 →
+  按「下」回到内容」；`FakeUpdateController` 增加 `download()`。旧的「Up 能到提示条」用例保持通过。
+- 注意：这个修复**只能通过手动安装** `v0.1.31` 生效 —— 坏掉的那个按钮本身没法把新版本装上去。
+- Android 更新链路本来就有：Download（下载对应 ABI 的 APK）→ Show file → `installApk` → 系统安装器
+  （需要「未知来源」权限）。
+
