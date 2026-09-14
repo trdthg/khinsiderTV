@@ -8,6 +8,7 @@ import 'package:khinsider/core/widgets/dpad_tile.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
 import 'package:khinsider/ui/search/search_screen.dart';
 import 'package:khinsider/ui/search/tv_keyboard.dart';
+import 'package:khinsider/ui/search/tv_system_text_field.dart';
 
 /// Records what the screen asks for, so the keyboard's Search key can be
 /// asserted without a network call.
@@ -286,23 +287,23 @@ void main() {
     );
   });
 
-  testWidgets('a TV types with the system IME by default', (tester) async {
+  testWidgets('a TV types with the platform keyboard by default', (
+    tester,
+  ) async {
     await pump(tester, tv: true, mode: TvKeyboardMode.system);
 
+    // A native EditText in a platform view: with a Flutter TextField the
+    // platform keyboard never receives the remote's D-pad (flutter#177360).
+    expect(find.byType(TvSystemTextField), findsOneWidget);
+    expect(
+      find.byType(TextField),
+      findsNothing,
+      reason: 'the TV field is the platform one now',
+    );
     expect(
       find.byType(TvKeyboard),
       findsNothing,
       reason: 'the built-in keyboard is the fallback, not the default',
-    );
-    expect(
-      tester.widget<TextField>(find.byType(TextField)).readOnly,
-      isFalse,
-      reason: 'the field must be editable for Android to open the IME',
-    );
-    expect(
-      tester.testTextInput.isVisible,
-      isTrue,
-      reason: 'focusing the field on entry must bring up the system keyboard',
     );
     expect(tester.takeException(), isNull);
   });
@@ -316,35 +317,25 @@ void main() {
     await tester.pump();
     expect(find.byType(TvKeyboard), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    expect(find.byType(TvSystemTextField), findsNothing);
 
     await tester.tap(find.byTooltip('Use the system keyboard'));
     await tester.pump();
     expect(find.byType(TvKeyboard), findsNothing);
-    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isFalse);
-    expect(tester.testTextInput.isVisible, isTrue);
-  });
-
-  testWidgets('selecting the field brings the system keyboard back', (
-    tester,
-  ) async {
-    await pump(tester, tv: true, mode: TvKeyboardMode.system);
-    expect(tester.testTextInput.isVisible, isTrue);
-
-    // The remote's Back dismisses the IME; the field never lost focus, so
-    // nothing would ask for it again without this.
-    tester.testTextInput.hide();
-    await tester.pump();
-    expect(tester.testTextInput.isVisible, isFalse);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.select);
-    await tester.pump();
-    expect(tester.testTextInput.isVisible, isTrue);
+    expect(find.byType(TvSystemTextField), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
   });
 
   testWidgets('left from the field reaches the keyboard button', (
     tester,
   ) async {
-    await pump(tester, tv: true, mode: TvKeyboardMode.system);
+    await pump(tester, tv: true, mode: TvKeyboardMode.builtin);
+
+    // The built-in panel is up and holds the focus on entry; Escape hides it
+    // and hands the remote back to the field.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();

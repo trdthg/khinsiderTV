@@ -11,6 +11,7 @@ import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
 import '../../state/search_controller.dart';
 import 'tv_keyboard.dart';
+import 'tv_system_text_field.dart';
 
 /// Search screen: text field + responsive album grid (list on narrow /
 /// portrait layouts, grid on TV / landscape).
@@ -48,6 +49,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     onKeyEvent: _onKeyboardModeKey,
   );
 
+  /// The Search button, used as the anchor for "leave the field downwards".
+  final _searchButtonFocus = FocusNode(debugLabel: 'search-button');
+  final FocusNode _nativeFieldAnchor = FocusNode(
+    debugLabel: 'search-field-native',
+  );
+
+  /// State of the platform-view field, for focusing it and hiding its keyboard.
+  final _systemFieldKey = GlobalKey<TvSystemTextFieldState>();
+
   /// True when this TV types with the app's own keyboard, i.e. the field is
   /// read-only and [TvKeyboard] is up. Everything else (phones, desktops, and a
   /// TV on the system IME) behaves like a normal editable field.
@@ -72,6 +82,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _controller.dispose();
     _searchFocus.dispose();
     _keyboardModeFocus.dispose();
+    _searchButtonFocus.dispose();
+    _nativeFieldAnchor.dispose();
     super.dispose();
   }
 
@@ -91,27 +103,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
-  /// Asks the platform to show the IME for the focused field.
-  ///
-  /// `TextField` only asks when the field *gains* focus, so after the user
-  /// dismisses the IME with Back there is no way back: the field never lost
-  /// focus, so nothing re-requests it. There is no public API for this on
-  /// `EditableText`, so this sends the same message the framework sends when it
-  /// opens a connection.
-  void _showSystemKeyboard() {
-    if (!_tv || _builtinKeyboard) return;
-    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
-  }
-
-  /// Left from the field reaches the keyboard-mode button, so the fallback
-  /// keyboard stays one press away on a remote.
+  /// Left from the field reaches the keyboard-mode button, so either keyboard
+  /// stays one press away on a remote; Right goes back to the field.
   KeyEventResult _onKeyboardModeKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      _searchFocus.requestFocus();
+      if (_builtinKeyboard) {
+        _searchFocus.requestFocus();
+      } else {
+        _nativeFieldAnchor.requestFocus();
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Moves the remote off the platform-view field.
+  ///
+  /// The native field owns the Android focus, so Flutter's own focus tree has
+  /// no current node to move *from*: anchor it on the Search button (attached
+  /// either way) and then step in [direction] from there.
+  void _leaveSystemField(TraversalDirection direction) {
+    _systemFieldKey.currentState?.blur();
+    _searchButtonFocus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).focusInDirection(direction);
+    });
   }
 
   /// True when the caret sits at the very start (or the field was never
@@ -121,16 +138,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return selection.isCollapsed && selection.baseOffset <= 0;
   }
 
-  /// Switches between the system IME and the built-in keyboard, and moves the
-  /// focus (and the IME) to wherever the new mode types.
+  /// Switches between the platform keyboard and the built-in one, and moves the
+  /// focus (and the keyboard) to wherever the new mode types.
   Future<void> _toggleKeyboardMode() async {
     await ref.read(tvKeyboardModeProvider.notifier).toggle();
     if (!mounted) return;
     if (_builtinKeyboard) {
       _setKeyboardOpen(true);
     } else {
-      _searchFocus.requestFocus();
-      _showSystemKeyboard();
+      _nativeFieldAnchor.requestFocus();
     }
   }
 
@@ -156,23 +172,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
 
-    if (_tv) {
+    // System-keyboard mode types into a platform view, which handles its own
+    // keys; this node is only attached in built-in mode.
+    if (_tv && _builtinKeyboard) {
       if (key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.select ||
           key == LogicalKeyboardKey.gameButtonA) {
-        if (_builtinKeyboard) {
-          // The built-in keyboard was hidden: this is the way back to it.
-          _setKeyboardOpen(true);
-        } else {
-          _showSystemKeyboard();
-        }
+        // The built-in keyboard was hidden: this is the way back to it.
+        _setKeyboardOpen(true);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowLeft && _caretAtStart) {
         _keyboardModeFocus.requestFocus();
         return KeyEventResult.handled;
       }
-      if (_builtinKeyboard) {
+      {
         // In this mode the field is read-only, so it is the place that has to
         // accept a physical keyboard's characters itself.
         final character = event.character;
@@ -213,7 +227,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (_builtinKeyboard) {
       _setKeyboardOpen(false);
     } else if (_tv) {
-      _searchFocus.unfocus();
+      _leaveSystemField(TraversalDirection.down);
     }
   }
 
@@ -224,6 +238,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final mode =
         ref.watch(tvKeyboardModeProvider).value ?? TvKeyboardMode.system;
     final builtinKeyboard = _tv && mode == TvKeyboardMode.builtin;
+    // The TV field is the platform's own EditText (see TvSystemTextField): that
+    // is the only way the platform keyboard gets the remote's D-pad.
+    final systemField = _tv && !builtinKeyboard;
 
     final searchBar = Padding(
       padding: EdgeInsets.fromLTRB(16, narrow ? 4 : 16, 16, narrow ? 10 : 8),
@@ -247,25 +264,61 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(width: 8),
           ],
           Expanded(
-            child: TextField(
-              // Only the built-in keyboard needs a read-only field: read-only
-              // means no input connection, which is what stops the system IME
-              // from appearing behind the panel. TVs on the system IME (the
-              // default) use an ordinary editable field.
-              readOnly: builtinKeyboard,
-              autofocus: !builtinKeyboard,
-              focusNode: _searchFocus,
-              controller: _controller,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search game soundtracks…',
-              ),
-            ),
+            child: systemField
+                ? Focus(
+                    // Anchors the platform field in Flutter's focus tree: the
+                    // native view owns the Android focus, so this node is how
+                    // "up from the results" (and the update banner handing the
+                    // remote back) can return to the field.
+                    focusNode: _nativeFieldAnchor,
+                    autofocus: true,
+                    onFocusChange: (hasFocus) {
+                      final state = _systemFieldKey.currentState;
+                      if (hasFocus) {
+                        state?.requestFocus();
+                      } else {
+                        state?.blur();
+                      }
+                    },
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TvSystemTextField(
+                        key: _systemFieldKey,
+                        controller: _controller,
+                        hintText: 'Search game soundtracks…',
+                        onSubmitted: _submit,
+                        onMoveDown: () =>
+                            _leaveSystemField(TraversalDirection.down),
+                        onMoveUp: () =>
+                            _leaveSystemField(TraversalDirection.up),
+                        onMoveLeft: () => _keyboardModeFocus.requestFocus(),
+                      ),
+                    ),
+                  )
+                : TextField(
+                    // Only the built-in keyboard needs a read-only field:
+                    // read-only means no input connection, which is what stops
+                    // the platform keyboard from appearing behind the panel.
+                    readOnly: builtinKeyboard,
+                    autofocus: !builtinKeyboard,
+                    focusNode: _searchFocus,
+                    controller: _controller,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _submit(),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search game soundtracks…',
+                    ),
+                  ),
           ),
           const SizedBox(width: 8),
           DpadIconButton(
+            focusNode: _searchButtonFocus,
             tooltip: 'Search',
             filled: true,
             icon: Icons.arrow_forward,

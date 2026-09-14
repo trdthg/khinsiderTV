@@ -35,6 +35,13 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // The TV search field: a real EditText, because Flutter's own text input
+        // never hands the D-pad to the platform keyboard on Google TV (see
+        // TvTextFieldView).
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            TvTextFieldView.CHANNEL_NAME,
+            TvTextFieldFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.khinsider/update")
             .setMethodCallHandler { call, result ->
                 if (call.method == "installApk") {

@@ -682,3 +682,32 @@
 - Android 更新链路本来就有：Download（下载对应 ABI 的 APK）→ Show file → `installApk` → 系统安装器
   （需要「未知来源」权限）。
 
+## Q. 第十四轮：Chromecast 系统键盘无法聚焦（上网查证 + 平台视图方案）
+
+- [x] **Q1 用户反馈**：`呼出的系统键盘还是无法聚焦` + `我想用系统键盘 ... 解决后就可以把咱们自己的实现删除掉了`
+- **查证**（本机 web_search/web_fetch 都被代理拦掉了：搜索接口 402、域名解析到非公网 IP；改用 `gh api` 直接查 GitHub ✅）
+  - flutter/flutter **#177360**（open，Chromecast 上「Unable to use software keyboard with TextField」）
+  - flutter/flutter **#154924**（closed as WAI：官方在模拟器/真机上发现「YouTube 和设置也一样」，认为 Android TV 正在放弃用 D-pad 操作软键盘，
+    且 Android TV 不是官方支持目标）
+  - flutter/flutter **#125541**（同样的现象：`Flutter activity still have focus and d-pad is navigating through elements behind keyboard`）
+  - flutter/flutter **#147772**（open，Android TV 上 TextField 的 D-pad 导航坏掉）
+  - ⭐ 关键：**#177360 里 2026-07 的评论**在真机 Google TV 上做了对照实验 —— 同一个页面、同一个 Gboard TV：
+    用 Flutter `TextField` 时方向键进不了键盘；把输入换成**平台视图里的原生 `EditText`** 后，Gboard TV 完全可以方向键选字母、
+    `IME_ACTION_DONE` 正常、密码框也正常。结论：**IME 仍然支持 D-pad，只是只对「平台文本输入」生效**，问题在 Flutter 提供的
+    `InputConnection`/`EditorInfo`。官方给的 workaround 就是「用平台视图嵌一个最小 `EditText`」。
+    注意评论里的坑：**不要重复设置 `inputType`**（每次都会 `restartInput()`，Gboard TV 会在每个按键后丢掉高亮）。
+- [x] **Q2 实现**：
+  - `android/.../TvTextFieldView.kt`（新）：`PlatformViewFactory` + `TvTextFieldView`，内部一个 `EditText`
+    （`TYPE_CLASS_TEXT`、`IME_ACTION_SEARCH | IME_FLAG_NO_FULLSCREEN`、单行、透明背景、颜色/字号/hint 由 Dart 传参），
+    文字变化 → `onChanged`、回车/搜索键 → `onSubmitted`、D-pad 下/上/左 → `onMoveDown`/`onMoveUp`/`onMoveLeft`（并 `clearFocus()`，
+    否则 Android 焦点还留在 EditText 上、Flutter 侧的键盘操作永远收不到键）；Dart → 原生支持 `setText`/`focus`/`blur`。
+  - `MainActivity.configureFlutterEngine` 注册工厂；`TvSystemTextField`（Dart，`AndroidView`）负责通道、文本同步
+    （只回写 selection，避免每敲一个字光标跳到末尾）、`requestFocus()`/`blur()`。
+  - 搜索页：TV + 系统键盘模式 → `TvSystemTextField`（外面套 `Focus(_nativeFieldAnchor, autofocus: true)`，
+    让「从结果往上」和「更新提示条还焦点」能回到输入框）；手机/桌面与自绘键盘模式仍用普通 `TextField`。
+  - `_leaveSystemField()`：平台视图握着 Android 焦点，Flutter 焦点树里没有「当前节点」，所以先锚定到 Search 按钮再按方向移动。
+  - `_showSystemKeyboard()`（v0.1.30 加的 `TextInput.show` 兜底）已删除：系统模式下已经不再有 Flutter 输入连接。
+- [x] **Q3 测试**：`test/tv_search_test.dart` 改成「TV 默认渲染 `TvSystemTextField`、没有 `TextField`、没有 `TvKeyboard`」「键盘按钮两种模式来回切」
+  「（自绘模式下）左→键盘按钮、右→输入框」。全套 123 个测试通过。
+- [ ] **Q4 待用户真机确认**：确认系统键盘能打字后，**删掉整个自绘键盘**（`TvKeyboard` + `TvKeyboardMode` 的 builtin 分支 + 测试 + 搜索框左侧按钮）。
+
