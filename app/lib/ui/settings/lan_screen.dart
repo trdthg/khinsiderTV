@@ -8,6 +8,7 @@ import '../../data/lan/lan_device.dart';
 import '../../data/preferences_store.dart';
 import '../../l10n/l10n.dart';
 import '../../state/lan_controller.dart';
+import '../../state/playback_sync_controller.dart';
 import '../search/tv_system_text_field.dart';
 import 'settings_widgets.dart';
 
@@ -62,6 +63,8 @@ class _LanScreenState extends ConsumerState<LanScreen> {
     final state = async.value;
     final notifier = ref.read(lanControllerProvider.notifier);
     final favorites = ref.watch(favoritesProvider).value?.length;
+    final sync = ref.watch(playbackSyncControllerProvider);
+    final syncNotifier = ref.read(playbackSyncControllerProvider.notifier);
 
     return Scaffold(
       body: SafeArea(
@@ -85,6 +88,51 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                   : ListView(
                       padding: const EdgeInsets.only(bottom: 28),
                       children: [
+                        SettingsSection(
+                          title: l.syncHostTitle,
+                          children: [
+                            SettingsRow(
+                              icon: Icons.speaker_group,
+                              title: sync.hosting
+                                  ? l.syncHosting
+                                  : l.syncHostTitle,
+                              subtitle: sync.hosting
+                                  ? l.syncFollowers(sync.followers)
+                                  : l.syncHostSubtitle,
+                              trailing: Switch(
+                                value: sync.hosting,
+                                onChanged: (on) => on
+                                    ? syncNotifier.startHosting()
+                                    : syncNotifier.stopHosting(),
+                              ),
+                              onSelect: sync.hosting
+                                  ? syncNotifier.stopHosting
+                                  : syncNotifier.startHosting,
+                            ),
+                            if (sync.following != null) ...[
+                              SettingsRow(
+                                icon: Icons.timer_outlined,
+                                title: l.syncDelayMinus,
+                                subtitle: sync.status,
+                                onSelect: () => syncNotifier.nudgeDelay(
+                                  const Duration(milliseconds: -10),
+                                ),
+                              ),
+                              SettingsRow(
+                                icon: Icons.timer,
+                                title: l.syncDelayPlus,
+                                onSelect: () => syncNotifier.nudgeDelay(
+                                  const Duration(milliseconds: 10),
+                                ),
+                              ),
+                              SettingsRow(
+                                icon: Icons.close,
+                                title: l.syncStopFollowing,
+                                onSelect: syncNotifier.stopFollowing,
+                              ),
+                            ],
+                          ],
+                        ),
                         SettingsSection(
                           title: l.lanThisDevice,
                           children: [
@@ -145,6 +193,8 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                                   device,
                                   state,
                                   notifier,
+                                  sync,
+                                  syncNotifier,
                                 ),
                             ],
                           ),
@@ -222,6 +272,8 @@ class _LanScreenState extends ConsumerState<LanScreen> {
     LanDevice device,
     LanState state,
     LanController notifier,
+    PlaybackSyncState sync,
+    PlaybackSyncController syncNotifier,
   ) {
     final expanded = _expanded == device.id;
     final l = l10n(context);
@@ -248,6 +300,13 @@ class _LanScreenState extends ConsumerState<LanScreen> {
           });
         },
       ),
+      if (device.playbackHost && sync.following?.id != device.id)
+        SettingsRow(
+          icon: Icons.speaker_group,
+          title: l.syncFollowDevice(device.name),
+          subtitle: l.syncFollowSubtitle,
+          onSelect: () => syncNotifier.follow(device),
+        ),
       if (expanded) ...[
         SettingsRow(
           icon: Icons.wifi_tethering,

@@ -52,6 +52,9 @@ class FakeAudioPlayer implements BaseAudioPlayer {
   Future<void> pause() async {}
   @override
   Future<void> seek(Duration position) async {}
+
+  @override
+  Future<void> setSpeed(double speed) async {}
   @override
   Future<void> skipToIndex(int index) async {}
   @override

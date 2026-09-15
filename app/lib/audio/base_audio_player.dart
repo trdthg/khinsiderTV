@@ -117,6 +117,12 @@ abstract class BaseAudioPlayer {
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
+
+  /// Nudge the playback rate, used to stay in step with a host device (see
+  /// `data/lan/playback_sync.dart`). Defaulted to a no-op so a test double that
+  /// only cares about the transport does not have to implement it; the real
+  /// implementation does.
+  Future<void> setSpeed(double speed) async {}
   Future<void> skipToIndex(int index);
   Future<void> next();
   Future<void> previous();

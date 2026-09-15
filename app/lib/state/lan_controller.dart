@@ -252,6 +252,10 @@ class LanController extends AsyncNotifier<LanState> {
     );
   }
 
+  /// The running service, for the playback-sync controller: hosting adds
+  /// endpoints to this same server rather than starting a second one.
+  LanService? get service => _service;
+
   /// Re-broadcast the discovery probe.
   /// Called by the device-list screen: keeps discovery running while it is
   /// open (peers expire after 20s) and stops it again on the way out.

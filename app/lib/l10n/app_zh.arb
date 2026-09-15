@@ -782,5 +782,59 @@
     }
   },
   "musicFolderBody": "安卓只有在授予「所有文件访问权限」之后，应用才能写入 Music/ —— 下一个界面里就有 KHInsider 的这个开关。\n\n之后下载的曲目会直接放进 Music/KHInsider，文件管理器、其它播放器和电脑都能看到。已经下载过的曲目仍然留在应用目录里，直到你删除或移动它们。",
-  "musicFolderDenied": "打开「所有文件访问权限」再回来：之后新下载的曲目会存到 Music/KHInsider。"
+  "musicFolderDenied": "打开「所有文件访问权限」再回来：之后新下载的曲目会存到 Music/KHInsider。",
+  "syncHostTitle": "把本机播放共享给其它设备",
+  "syncHostSubtitle": "其它设备可以跟随本机，一起播放同一首",
+  "syncHosting": "正在共享播放",
+  "syncFollowers": "{count} 台设备正在跟随",
+  "@syncFollowers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncFollowDevice": "跟随 {name} 一起播放",
+  "@syncFollowDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncFollowSubtitle": "播放同一首，并保持同步",
+  "syncStopFollowing": "停止跟随",
+  "syncDelayMinus": "提前 10 毫秒",
+  "syncDelayPlus": "延后 10 毫秒",
+  "syncConnecting": "正在连接 {name}…",
+  "@syncConnecting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncFollowing": "正在跟随 {name} · 偏差 {drift} 毫秒{delay}",
+  "@syncFollowing": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "drift": {
+        "type": "String"
+      },
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "syncDelaySuffix": " · 本机延迟 {ms} 毫秒",
+  "@syncDelaySuffix": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "syncHostStopped": "对方已经停止同步播放"
 }

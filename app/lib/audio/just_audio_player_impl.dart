@@ -228,6 +228,9 @@ class JustAudioPlayerImpl implements BaseAudioPlayer {
   Future<void> pause() => _player.pause();
 
   @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override

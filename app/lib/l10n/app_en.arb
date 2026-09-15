@@ -782,5 +782,59 @@
     }
   },
   "musicFolderBody": "Android only lets an app write into Music/ once you grant it \"all files access\" — the next screen has that switch for KHInsider.\n\nDownloads then land in Music/KHInsider, where your file manager, other players and your computer can see them. Tracks that are already downloaded stay in the app folder until you delete or move them.",
-  "musicFolderDenied": "Turn on \"all files access\", then come back: new downloads go to Music/KHInsider."
+  "musicFolderDenied": "Turn on \"all files access\", then come back: new downloads go to Music/KHInsider.",
+  "syncHostTitle": "Share this device's playback",
+  "syncHostSubtitle": "Other devices can follow this one and stay in step",
+  "syncHosting": "Sharing playback",
+  "syncFollowers": "{count} following",
+  "@syncFollowers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncFollowDevice": "Follow {name}",
+  "@syncFollowDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncFollowSubtitle": "Play the same thing, in step",
+  "syncStopFollowing": "Stop following",
+  "syncDelayMinus": "10 ms earlier",
+  "syncDelayPlus": "10 ms later",
+  "syncConnecting": "Connecting to {name}…",
+  "@syncConnecting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncFollowing": "Following {name} · {drift} ms off{delay}",
+  "@syncFollowing": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "drift": {
+        "type": "String"
+      },
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "syncDelaySuffix": " · this device {ms} ms late",
+  "@syncDelaySuffix": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "syncHostStopped": "The other device stopped sharing its playback"
 }

@@ -72,6 +72,9 @@ class RecordingPlayer implements BaseAudioPlayer {
 
   @override
   Future<void> seek(Duration position) async => calls.add('seek');
+
+  @override
+  Future<void> setSpeed(double speed) async {}
   @override
   Future<void> skipToIndex(int index) async => calls.add('skipToIndex');
   @override

@@ -842,4 +842,54 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get musicFolderDenied =>
       'Turn on \"all files access\", then come back: new downloads go to Music/KHInsider.';
+
+  @override
+  String get syncHostTitle => 'Share this device\'s playback';
+
+  @override
+  String get syncHostSubtitle =>
+      'Other devices can follow this one and stay in step';
+
+  @override
+  String get syncHosting => 'Sharing playback';
+
+  @override
+  String syncFollowers(int count) {
+    return '$count following';
+  }
+
+  @override
+  String syncFollowDevice(String name) {
+    return 'Follow $name';
+  }
+
+  @override
+  String get syncFollowSubtitle => 'Play the same thing, in step';
+
+  @override
+  String get syncStopFollowing => 'Stop following';
+
+  @override
+  String get syncDelayMinus => '10 ms earlier';
+
+  @override
+  String get syncDelayPlus => '10 ms later';
+
+  @override
+  String syncConnecting(String name) {
+    return 'Connecting to $name…';
+  }
+
+  @override
+  String syncFollowing(String name, String drift, String delay) {
+    return 'Following $name · $drift ms off$delay';
+  }
+
+  @override
+  String syncDelaySuffix(String ms) {
+    return ' · this device $ms ms late';
+  }
+
+  @override
+  String get syncHostStopped => 'The other device stopped sharing its playback';
 }

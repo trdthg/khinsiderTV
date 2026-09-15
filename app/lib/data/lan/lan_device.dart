@@ -10,6 +10,7 @@ class LanDevice {
     this.favorites = 0,
     this.lastSeen,
     this.manual = false,
+    this.playbackHost = false,
   });
 
   /// Stable per-install id: the only thing that identifies a device across
@@ -37,6 +38,11 @@ class LanDevice {
   /// is never dropped just because it stopped broadcasting.
   final bool manual;
 
+  /// Whether the peer currently offers its playback for others to follow
+  /// ("sync playback" is on). Advertised in the beacon, so the device list can
+  /// offer the row before anything is contacted.
+  final bool playbackHost;
+
   Uri get baseUri => Uri.parse('http://$host:$port');
 
   LanDevice copyWith({
@@ -47,6 +53,7 @@ class LanDevice {
     int? favorites,
     DateTime? lastSeen,
     bool? manual,
+    bool? playbackHost,
   }) => LanDevice(
     id: id,
     name: name ?? this.name,
@@ -56,6 +63,7 @@ class LanDevice {
     favorites: favorites ?? this.favorites,
     lastSeen: lastSeen ?? this.lastSeen,
     manual: manual ?? this.manual,
+    playbackHost: playbackHost ?? this.playbackHost,
   );
 
   Map<String, Object?> toJson() => {
@@ -65,6 +73,7 @@ class LanDevice {
     'port': port,
     'v': version,
     'fav': favorites,
+    if (playbackHost) 'pb': 1,
   };
 
   /// Discovery traffic is unauthenticated, so nothing here may be trusted
@@ -91,6 +100,7 @@ class LanDevice {
       favorites: value['fav'] is int ? value['fav'] as int : 0,
       lastSeen: DateTime.now(),
       manual: manual,
+      playbackHost: value['pb'] == 1,
     );
   }
 

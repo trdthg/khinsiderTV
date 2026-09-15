@@ -804,4 +804,53 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get musicFolderDenied =>
       '打开「所有文件访问权限」再回来：之后新下载的曲目会存到 Music/KHInsider。';
+
+  @override
+  String get syncHostTitle => '把本机播放共享给其它设备';
+
+  @override
+  String get syncHostSubtitle => '其它设备可以跟随本机，一起播放同一首';
+
+  @override
+  String get syncHosting => '正在共享播放';
+
+  @override
+  String syncFollowers(int count) {
+    return '$count 台设备正在跟随';
+  }
+
+  @override
+  String syncFollowDevice(String name) {
+    return '跟随 $name 一起播放';
+  }
+
+  @override
+  String get syncFollowSubtitle => '播放同一首，并保持同步';
+
+  @override
+  String get syncStopFollowing => '停止跟随';
+
+  @override
+  String get syncDelayMinus => '提前 10 毫秒';
+
+  @override
+  String get syncDelayPlus => '延后 10 毫秒';
+
+  @override
+  String syncConnecting(String name) {
+    return '正在连接 $name…';
+  }
+
+  @override
+  String syncFollowing(String name, String drift, String delay) {
+    return '正在跟随 $name · 偏差 $drift 毫秒$delay';
+  }
+
+  @override
+  String syncDelaySuffix(String ms) {
+    return ' · 本机延迟 $ms 毫秒';
+  }
+
+  @override
+  String get syncHostStopped => '对方已经停止同步播放';
 }

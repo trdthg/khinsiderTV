@@ -1398,6 +1398,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turn on \"all files access\", then come back: new downloads go to Music/KHInsider.'**
   String get musicFolderDenied;
+
+  /// No description provided for @syncHostTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this device\'s playback'**
+  String get syncHostTitle;
+
+  /// No description provided for @syncHostSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other devices can follow this one and stay in step'**
+  String get syncHostSubtitle;
+
+  /// No description provided for @syncHosting.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing playback'**
+  String get syncHosting;
+
+  /// No description provided for @syncFollowers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} following'**
+  String syncFollowers(int count);
+
+  /// No description provided for @syncFollowDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow {name}'**
+  String syncFollowDevice(String name);
+
+  /// No description provided for @syncFollowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Play the same thing, in step'**
+  String get syncFollowSubtitle;
+
+  /// No description provided for @syncStopFollowing.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop following'**
+  String get syncStopFollowing;
+
+  /// No description provided for @syncDelayMinus.
+  ///
+  /// In en, this message translates to:
+  /// **'10 ms earlier'**
+  String get syncDelayMinus;
+
+  /// No description provided for @syncDelayPlus.
+  ///
+  /// In en, this message translates to:
+  /// **'10 ms later'**
+  String get syncDelayPlus;
+
+  /// No description provided for @syncConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to {name}…'**
+  String syncConnecting(String name);
+
+  /// No description provided for @syncFollowing.
+  ///
+  /// In en, this message translates to:
+  /// **'Following {name} · {drift} ms off{delay}'**
+  String syncFollowing(String name, String drift, String delay);
+
+  /// No description provided for @syncDelaySuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' · this device {ms} ms late'**
+  String syncDelaySuffix(String ms);
+
+  /// No description provided for @syncHostStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The other device stopped sharing its playback'**
+  String get syncHostStopped;
 }
 
 class _AppLocalizationsDelegate

@@ -8,6 +8,8 @@ import '../audio/audio_cache_manager.dart';
 import '../audio/base_audio_player.dart';
 import '../audio/just_audio_player_impl.dart';
 import '../data/khinsider_client.dart';
+import '../data/lan/playback_sync.dart';
+import 'playback_sync_controller.dart';
 import 'track_cache_controller.dart';
 
 /// Preferred streaming format for the audio-quality switcher.
@@ -520,13 +522,38 @@ class PlayerController extends Notifier<PlayerState>
     );
   }
 
-  @override
-  Future<void> pause() => _player.pause();
+  /// True while this device follows another one's playback: "what plays" is
+  /// the host's decision, so a transport press here is forwarded instead of
+  /// being applied locally (which would only put the two out of step).
+  bool get _isFollower =>
+      ref.read(playbackSyncControllerProvider).following != null;
+
+  /// Forwards a transport command to the host, and reports whether it did: the
+  /// caller must then do nothing locally.
+  bool _forwardIfFollowing(String action, {Duration? position}) {
+    if (!_isFollower) return false;
+    unawaited(
+      ref
+          .read(playbackSyncControllerProvider.notifier)
+          .forwardCommand(action, position: position),
+    );
+    return true;
+  }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> pause() async {
+    if (_forwardIfFollowing(SyncMessage.pause)) return;
+    await _player.pause();
+  }
+
+  @override
+  Future<void> play() async {
+    if (_forwardIfFollowing(SyncMessage.play)) return;
+    await _player.play();
+  }
 
   Future<void> togglePlayPause() async {
+    if (_forwardIfFollowing(SyncMessage.toggle)) return;
     if (state.playing) {
       await _player.pause();
     } else {
@@ -559,6 +586,7 @@ class PlayerController extends Notifier<PlayerState>
 
   @override
   Future<void> next() async {
+    if (_forwardIfFollowing(SyncMessage.next)) return;
     final album = _playingAlbum;
     final current = state.currentIndex;
     if (album != null && current != null) {
@@ -581,11 +609,15 @@ class PlayerController extends Notifier<PlayerState>
   }
 
   @override
-  Future<void> previous() => _player.previous();
+  Future<void> previous() async {
+    if (_forwardIfFollowing(SyncMessage.previous)) return;
+    await _player.previous();
+  }
 
   /// Halt playback and drop the queue (media Stop key).
   @override
   Future<void> stop() async {
+    if (_forwardIfFollowing(SyncMessage.stop)) return;
     final session = _session;
     _loadCancelToken?.cancel();
     _prefetchToken?.cancel();
@@ -603,7 +635,10 @@ class PlayerController extends Notifier<PlayerState>
     state = PlayerState(preferredFormat: state.preferredFormat);
   }
 
-  Future<void> seek(Duration pos) => _player.seek(pos);
+  Future<void> seek(Duration pos) async {
+    if (_forwardIfFollowing(SyncMessage.seek, position: pos)) return;
+    await _player.seek(pos);
+  }
 
   /// Switch streaming quality; the current track re-loads at its position.
   Future<void> setPreferredFormat(AudioFormat format) async {

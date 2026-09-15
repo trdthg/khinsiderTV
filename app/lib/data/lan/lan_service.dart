@@ -5,6 +5,7 @@ import 'dart:math';
 
 import '../../l10n/generated/app_localizations.dart';
 import '../../l10n/l10n.dart';
+import 'playback_sync.dart';
 import 'lan_device.dart';
 
 /// Thrown when a peer cannot be reached or answers with something unexpected.
@@ -155,6 +156,22 @@ class LanService {
 
   RawDatagramSocket? _udp;
   HttpServer? _http;
+
+  /// Followers currently attached to this device's playback.
+  final Set<WebSocket> _followers = {};
+
+  /// Set by the playback-sync controller while this device is hosting: what to
+  /// tell a follower, or null when there is nothing to follow yet.
+  PlaybackSnapshot? Function()? playbackSnapshot;
+
+  /// Set while hosting: a follower asked for something (play/pause/next/...).
+  /// The host performs it, and its own state change then goes out to everyone —
+  /// which is why this only ever runs on the host.
+  void Function(String action, int? positionMillis)? onPlaybackCommand;
+
+  /// Advertised in the beacon as `pb`, so the other device's list can offer to
+  /// follow without contacting this one first.
+  bool hostingPlayback = false;
   Timer? _sweeper;
   Timer? _prober;
   bool _watching = false;
@@ -223,6 +240,12 @@ class LanService {
     } catch (_) {}
     _udp?.close();
     _udp = null;
+    for (final socket in _followers.toList()) {
+      try {
+        await socket.close();
+      } catch (_) {}
+    }
+    _followers.clear();
     await _http?.close(force: true);
     _http = null;
     _devices.clear();
@@ -493,6 +516,7 @@ class LanService {
     'v': appVersion,
     'port': _http?.port ?? 0,
     'fav': favoriteCount,
+    if (hostingPlayback) 'pb': 1,
   };
 
   List<int> _beacon(String kind) =>
@@ -571,6 +595,24 @@ class LanService {
         });
         return;
       }
+      if (path == '/kh/playback/ws') {
+        // A follower's channel: state flows down, pings and commands flow up.
+        // Everything else about it is the same protocol as the HTTP API, and
+        // the same header guard above has already been applied.
+        final socket = await WebSocketTransformer.upgrade(request);
+        _attachFollower(socket);
+        return;
+      }
+      if (request.method == 'GET' && path == '/kh/playback') {
+        final snapshot = playbackSnapshot?.call();
+        await _writeJson(response, {
+          'id': deviceId,
+          'name': deviceName,
+          'hosting': hostingPlayback,
+          if (snapshot != null) 'state': snapshot.toJson(),
+        });
+        return;
+      }
       if (request.method == 'GET' && path == '/kh/favorites') {
         await _writeJson(response, {'favorites': await readFavorites()});
         return;
@@ -627,6 +669,94 @@ class LanService {
       try {
         await response.close();
       } catch (_) {}
+    }
+  }
+
+  void _attachFollower(WebSocket socket) {
+    _followers.add(socket);
+    _sendPlayback(socket);
+    socket.listen(
+      (Object? data) => _onFollowerMessage(socket, data),
+      onDone: () => _followers.remove(socket),
+      onError: (Object _) => _followers.remove(socket),
+      cancelOnError: true,
+    );
+  }
+
+  /// Answers what a follower sends. Anything unparseable is dropped: a peer on
+  /// a different build must never be able to take the host down.
+  void _onFollowerMessage(WebSocket socket, Object? data) {
+    if (data is! String) return;
+    Map<String, Object?>? message;
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map) message = JsonMap.from(decoded);
+    } catch (_) {
+      return;
+    }
+    if (message == null) return;
+    switch (message['t']) {
+      case SyncMessage.ping:
+        // Timestamped here, as late as possible: the follower measures the
+        // whole round trip, so the answer must carry the moment it was made.
+        final client = message['c'];
+        socket.add(
+          jsonEncode({
+            't': SyncMessage.pong,
+            'c': client is int ? client : 0,
+            's': DateTime.now().millisecondsSinceEpoch,
+          }),
+        );
+      case SyncMessage.command:
+        final action = message['a'];
+        if (action is! String) return;
+        final position = message['p'];
+        onPlaybackCommand?.call(action, position is int ? position : null);
+    }
+  }
+
+  void _sendPlayback(WebSocket socket) {
+    final snapshot = playbackSnapshot?.call();
+    if (snapshot == null) return;
+    try {
+      socket.add(jsonEncode({'t': SyncMessage.state, ...snapshot.toJson()}));
+    } catch (_) {
+      _followers.remove(socket);
+    }
+  }
+
+  /// Push the current state to every follower. Called by the sync controller
+  /// whenever what is playing changes.
+  void broadcastPlayback() {
+    if (_followers.isEmpty) return;
+    for (final socket in _followers.toList()) {
+      _sendPlayback(socket);
+    }
+  }
+
+  /// How many devices are following this one right now.
+  int get followerCount => _followers.length;
+
+  /// Opens the follower channel to [peer]'s host. Throws (as a [LanException])
+  /// when the peer cannot be reached, so the UI can say why.
+  Future<WebSocket> connectPlayback(LanDevice peer) async {
+    final device = peer.port == 0
+        ? (await _probeHost(peer.host) ?? peer)
+        : peer;
+    try {
+      return await WebSocket.connect(
+        'ws://${device.host}:${device.port}/kh/playback/ws',
+        headers: {'x-khinsider': _protocol, 'x-khinsider-name': deviceName},
+      ).timeout(const Duration(seconds: 6));
+    } catch (e) {
+      throw LanException(
+        _strings().lanUnreachableAfterRetry(
+          device.name,
+          device.host,
+          device.port,
+          _explain(e),
+        ),
+      );
     }
   }
 
