@@ -6,7 +6,10 @@
 **/.pub-cache/
 **/.pub/
 **/build/
+# Committed for the app: CI resolves fresh otherwise, and a dependency
+# published yesterday can require a newer Dart than the pinned Flutter ships.
 **/pubspec.lock
+!app/pubspec.lock
 .DS_Store
 *.iml
 .idea/
