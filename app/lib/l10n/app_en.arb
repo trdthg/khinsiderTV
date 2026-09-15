@@ -855,5 +855,16 @@
         "type": "String"
       }
     }
+  },
+  "syncPositions": "Host at {host}s, this device at {local}s",
+  "@syncPositions": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "local": {
+        "type": "String"
+      }
+    }
   }
 }

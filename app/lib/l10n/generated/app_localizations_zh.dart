@@ -872,4 +872,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String syncFailed(String why) {
     return '同步出问题：$why';
   }
+
+  @override
+  String syncPositions(String host, String local) {
+    return '主机 $host 秒，本机 $local 秒';
+  }
 }

@@ -912,4 +912,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String syncFailed(String why) {
     return 'Sync problem: $why';
   }
+
+  @override
+  String syncPositions(String host, String local) {
+    return 'Host at ${host}s, this device at ${local}s';
+  }
 }

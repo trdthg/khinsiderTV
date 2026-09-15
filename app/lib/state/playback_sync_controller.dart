@@ -26,6 +26,7 @@ class PlaybackSyncState {
     this.aligned = false,
     this.followers = 0,
     this.status,
+    this.detail,
     this.error,
   });
 
@@ -51,6 +52,10 @@ class PlaybackSyncState {
   final int followers;
 
   final String? status;
+
+  /// Where each side is, for the one thing a number alone cannot tell apart:
+  /// whether the host's position arrived wrong or this device's own reading is.
+  final String? detail;
   final String? error;
 
   SyncRole get role => hosting
@@ -65,6 +70,7 @@ class PlaybackSyncState {
     bool? aligned,
     int? followers,
     Object? status = _unset,
+    Object? detail = _unset,
     Object? error = _unset,
   }) => PlaybackSyncState(
     hosting: hosting ?? this.hosting,
@@ -76,6 +82,7 @@ class PlaybackSyncState {
     aligned: aligned ?? this.aligned,
     followers: followers ?? this.followers,
     status: identical(status, _unset) ? this.status : status as String?,
+    detail: identical(detail, _unset) ? this.detail : detail as String?,
     error: identical(error, _unset) ? this.error : error as String?,
   );
 
@@ -606,7 +613,18 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     }
 
     if (!ref.mounted) return;
+    final target = advice.target;
+    final localNow = livePosition(
+      sampled: _localPosition,
+      sampledAtMillis: _localPositionAt,
+      nowMillis: now,
+      playing: _localPlaying,
+    );
     state = state.copyWith(
+      detail: stringsFor(currentUiLocale).syncPositions(
+        (target.inMilliseconds / 1000).toStringAsFixed(1),
+        (localNow.inMilliseconds / 1000).toStringAsFixed(1),
+      ),
       drift: settling ? state.drift : advice.drift,
       aligned: true,
       status: _statusLine(),

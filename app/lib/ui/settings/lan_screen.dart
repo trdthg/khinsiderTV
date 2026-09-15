@@ -127,6 +127,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                               SettingsRow(
                                 icon: Icons.sync,
                                 title: sync.status ?? l.syncConnecting(''),
+                                subtitle: sync.detail,
                               ),
                               SettingsRow(
                                 icon: Icons.timer_outlined,

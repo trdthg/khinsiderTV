@@ -1506,6 +1506,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sync problem: {why}'**
   String syncFailed(String why);
+
+  /// No description provided for @syncPositions.
+  ///
+  /// In en, this message translates to:
+  /// **'Host at {host}s, this device at {local}s'**
+  String syncPositions(String host, String local);
 }
 
 class _AppLocalizationsDelegate

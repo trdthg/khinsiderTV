@@ -855,5 +855,16 @@
         "type": "String"
       }
     }
+  },
+  "syncPositions": "主机 {host} 秒，本机 {local} 秒",
+  "@syncPositions": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "local": {
+        "type": "String"
+      }
+    }
   }
 }
