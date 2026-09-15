@@ -70,9 +70,14 @@ class SettingsSection extends StatelessWidget {
 
 /// One line in a [SettingsSection].
 ///
-/// With [onSelect] it is a [DpadTile], so a remote can reach it; without one it
-/// is inert text (a value such as the current version), which keeps the focus
-/// ring off things that do nothing.
+/// Every row is a [DpadTile], so a remote can land on all of them, including
+/// the ones that only show a value. Whether a row *does* anything when it is
+/// selected is a separate question: with no [onSelect] it is simply inert.
+///
+/// Keeping those two things apart is what makes the focus order stable. A row
+/// used to change widget type — tile with an action, plain text without — every
+/// time its action came and went (while a check was running, say), and the
+/// focus ring moved to a neighbour each time the list changed shape.
 class SettingsRow extends StatelessWidget {
   const SettingsRow({
     super.key,
@@ -93,7 +98,8 @@ class SettingsRow extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
 
-  /// Null makes the row non-interactive (never focused, not tappable).
+  /// Null leaves the row inert: it still takes focus, but selecting it does
+  /// nothing. Only rows that could never be useful keep it that way.
   final VoidCallback? onSelect;
 
   /// Paints the title/icon in the error colour.
@@ -150,12 +156,11 @@ class SettingsRow extends StatelessWidget {
         ],
       ),
     );
-    if (onSelect == null) return content;
     return DpadTile(
       focusNode: focusNode,
       autofocus: autofocus,
       borderRadius: 14,
-      onSelect: onSelect!,
+      onSelect: onSelect ?? _inert,
       child: content,
     );
   }
@@ -190,6 +195,10 @@ class SettingsHeader extends StatelessWidget {
     );
   }
 }
+
+/// Selecting a row that has no action must not do anything — but the row still
+/// has to be selectable, so [DpadTile] gets something to call.
+void _inert() {}
 
 /// `1.2 GB` / `345 MB` / `12 KB`.
 String formatBytes(int bytes) {
