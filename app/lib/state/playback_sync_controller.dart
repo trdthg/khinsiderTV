@@ -505,14 +505,16 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
       // in over the next few seconds.
       final target = _target();
       _settleUntil = _now + syncSettleAfterSeek.inMilliseconds;
-      if (target != null) {
+      // Only a shallow jump. Deep into a track this device has not buffered,
+      // a seek means re-fetching from the start of the stream, which stalls —
+      // and the stall is heard as stuttering, which is worse than starting the
+      // track from the beginning and lining up properly on the next one.
+      if (target != null && target <= syncAdoptSeekLimit) {
         try {
           await local.seek(target);
-        } catch (_) {
-          // Not fatal: the correction loop reaches the same place without
-          // interrupting anything, so this is not worth reporting.
-        }
+        } catch (_) {}
       }
+      _appliedSpeed = 1.0;
       // Marked as loaded only now: setting this first (as it did before) meant a
       // failed load was never retried for that track, so the follower stayed
       // silent for the whole song it could not open.

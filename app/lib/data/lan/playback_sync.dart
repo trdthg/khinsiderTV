@@ -208,7 +208,7 @@ const Duration syncDeadZone = Duration(milliseconds: 30);
 /// Deliberately generous. Seeking a track that is still being cached costs a
 /// re-open and a fresh buffer — that is heard as a gap — so the rate correction
 /// is given a wide band to work in (5% removes 250ms in five seconds).
-const Duration syncSeekThreshold = Duration(milliseconds: 250);
+const Duration syncSeekThreshold = Duration(milliseconds: 1500);
 
 /// A seek needs a moment before the position it reports means anything. Acting
 /// on the in-flight value turns one correction into a burst of them.
@@ -216,7 +216,14 @@ const Duration syncSettleAfterSeek = Duration(milliseconds: 800);
 
 /// The least time between two seeks. Even a real drift is not worth a gap every
 /// half second, and the rate correction keeps working meanwhile.
-const Duration syncSeekCooldown = Duration(milliseconds: 5000);
+const Duration syncSeekCooldown = Duration(milliseconds: 20000);
+
+/// How far into a track a follower is willing to jump when it adopts the host's
+/// track. Seeking deep into a stream that this device has not buffered yet
+/// stalls playback, and a stall is heard as stuttering — so past this the
+/// follower starts the track from the beginning and lets the next track line
+/// up, which is a steady stream instead of a broken one.
+const Duration syncAdoptSeekLimit = Duration(seconds: 20);
 
 /// How much of the drift to remove per second while nudging. 1/s means the
 /// whole difference is gone in a second; the cap below keeps the rate change
