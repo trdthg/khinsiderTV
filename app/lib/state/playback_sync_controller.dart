@@ -203,7 +203,8 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     service
       ..hostingPlayback = true
       ..playbackSnapshot = _snapshot
-      ..onPlaybackCommand = _runCommand;
+      ..onPlaybackCommand = _runCommand
+      ..onFollowerCountChanged = _refreshFollowers;
     _hostSub?.close();
     // Every change of what is playing (including the position ticking) goes out
     // at once, so a play or a pause lands in milliseconds rather than at the
@@ -232,12 +233,22 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
       service
         ..hostingPlayback = false
         ..playbackSnapshot = null
-        ..onPlaybackCommand = null;
+        ..onPlaybackCommand = null
+        ..onFollowerCountChanged = null;
       // The followers' sockets are closed by the service: a follower that loses
       // the host stops following rather than freezing on a stale position.
       unawaited(service.refresh());
     }
     state = const PlaybackSyncState();
+  }
+
+  /// Kept up to date as followers come and go, rather than sampled once when
+  /// sharing is switched on (which is always "0 following").
+  void _refreshFollowers() {
+    if (!state.hosting || !ref.mounted) return;
+    final count = _service?.followerCount ?? 0;
+    if (count == state.followers) return;
+    state = state.copyWith(followers: count);
   }
 
   /// Host side: what a follower should be doing right now.

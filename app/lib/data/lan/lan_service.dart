@@ -175,6 +175,11 @@ class LanService {
   /// else on the LAN.
   void Function(LanDevice host)? onFollowRequest;
 
+  /// A follower attached or went away. The host's screen shows how many devices
+  /// are following, and that number cannot be captured once when sharing is
+  /// switched on — it is nearly always zero at that moment.
+  void Function()? onFollowerCountChanged;
+
   /// Advertised in the beacon as `pb`, so the other device's list can offer to
   /// follow without contacting this one first.
   bool hostingPlayback = false;
@@ -710,13 +715,18 @@ class LanService {
 
   void _attachFollower(WebSocket socket) {
     _followers.add(socket);
+    onFollowerCountChanged?.call();
     _sendPlayback(socket);
     socket.listen(
       (Object? data) => _onFollowerMessage(socket, data),
-      onDone: () => _followers.remove(socket),
-      onError: (Object _) => _followers.remove(socket),
+      onDone: () => _dropFollower(socket),
+      onError: (Object _) => _dropFollower(socket),
       cancelOnError: true,
     );
+  }
+
+  void _dropFollower(WebSocket socket) {
+    if (_followers.remove(socket)) onFollowerCountChanged?.call();
   }
 
   /// Answers what a follower sends. Anything unparseable is dropped: a peer on

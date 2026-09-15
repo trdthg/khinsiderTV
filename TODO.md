@@ -1121,3 +1121,11 @@
 - [x] 测试 +2（共 30 条）：200ms 的旧采样不再被当成偏差（并对比「按字面读」确实会读出 -200ms）；
       `livePosition` 在暂停与采样时间倒流时都不外推。
 
+## AG. 未发布（v0.3.9）：主机上一直显示 0 following
+
+- [x] **根因**：`state.followers` 只在 `startHosting()` 那一刻读了一次 `service.followerCount` ——
+      而那一刻通常还没有任何设备连上来，所以永远是 0，之后也没人再更新。
+- [x] `LanService.onFollowerCountChanged` 在**跟随端接入/断开**时回调（`_attachFollower` / `_dropFollower`，
+      只有真的增删了才回调），`startHosting` 装上它、`stopHosting` 摘掉它，数字随之实时刷新。
+- [x] 测试 +1（共 31 条）：连接与断开都会触发通知，且只在实际变化时触发。
+

@@ -540,6 +540,20 @@ void main() {
       await _until(() => host.followerCount == 0);
     });
 
+    test('the host is told when the number of followers changes', () async {
+      // The screen showing "0 following" while a device is following was
+      // exactly this: the count was read once, before anyone had connected.
+      var notifications = 0;
+      host.onFollowerCountChanged = () => notifications++;
+      final socket = await follower.connectPlayback(hostAsPeer());
+      await _until(() => host.followerCount == 1);
+      expect(notifications, greaterThan(0));
+      final seen = notifications;
+      await socket.close();
+      await _until(() => host.followerCount == 0);
+      expect(notifications, greaterThan(seen));
+    });
+
     test(
       'reaching a device that is not there fails with a real reason',
       () async {
