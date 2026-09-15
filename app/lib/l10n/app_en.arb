@@ -836,5 +836,24 @@
       }
     }
   },
-  "syncHostStopped": "The other device stopped sharing its playback"
+  "syncHostStopped": "The other device stopped sharing its playback",
+  "syncInviteAll": "Make every other device follow this one",
+  "syncInviteAllSubtitle": "Remote control: they switch over without you touching them",
+  "syncInvited": "{count} devices are following now",
+  "@syncInvited": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncInvitedNone": "No other device answered",
+  "syncFailed": "Sync problem: {why}",
+  "@syncFailed": {
+    "placeholders": {
+      "why": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -836,5 +836,24 @@
       }
     }
   },
-  "syncHostStopped": "对方已经停止同步播放"
+  "syncHostStopped": "对方已经停止同步播放",
+  "syncInviteAll": "让其它设备都跟随本机",
+  "syncInviteAllSubtitle": "远程控制：不用去动其它设备，它们会直接跟随本机",
+  "syncInvited": "已有 {count} 台设备跟随",
+  "@syncInvited": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncInvitedNone": "没有其它设备响应",
+  "syncFailed": "同步出问题：{why}",
+  "@syncFailed": {
+    "placeholders": {
+      "why": {
+        "type": "String"
+      }
+    }
+  }
 }

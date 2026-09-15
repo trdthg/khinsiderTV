@@ -853,4 +853,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get syncHostStopped => '对方已经停止同步播放';
+
+  @override
+  String get syncInviteAll => '让其它设备都跟随本机';
+
+  @override
+  String get syncInviteAllSubtitle => '远程控制：不用去动其它设备，它们会直接跟随本机';
+
+  @override
+  String syncInvited(int count) {
+    return '已有 $count 台设备跟随';
+  }
+
+  @override
+  String get syncInvitedNone => '没有其它设备响应';
+
+  @override
+  String syncFailed(String why) {
+    return '同步出问题：$why';
+  }
 }

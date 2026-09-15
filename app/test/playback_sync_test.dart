@@ -449,6 +449,41 @@ void main() {
       expect(host.followerCount, 1);
     });
 
+    test(
+      'a device can be asked to follow, and is told where to connect',
+      () async {
+        final asked = <LanDevice>[];
+        host.onFollowRequest = asked.add;
+        await follower.requestFollow(hostAsPeer(), port: 45678);
+        expect(asked, hasLength(1));
+        // The id and the port come from the payload...
+        expect(asked.single.id, 'fol');
+        expect(asked.single.port, 45678);
+        // ...but the address comes from the connection, so a peer cannot point
+        // this device at somebody else on the LAN.
+        expect(asked.single.host, '127.0.0.1');
+      },
+    );
+
+    test('a device with no sync controller refuses to be followed', () async {
+      // onFollowRequest is only installed once the sync controller exists: a
+      // request to a plain file-sharing device is a bad request, not a crash.
+      await expectLater(
+        follower.requestFollow(hostAsPeer(), port: 1),
+        throwsA(isA<LanException>()),
+      );
+    });
+
+    test('a follow request that names no port is refused', () async {
+      var called = false;
+      host.onFollowRequest = (_) => called = true;
+      await expectLater(
+        follower.requestFollow(hostAsPeer(), port: 0),
+        throwsA(isA<LanException>()),
+      );
+      expect(called, isFalse);
+    });
+
     test('a follower that goes away is forgotten', () async {
       final socket = await follower.connectPlayback(hostAsPeer());
       await _until(() => host.followerCount == 1);

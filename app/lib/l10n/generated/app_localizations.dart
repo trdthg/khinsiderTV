@@ -1476,6 +1476,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The other device stopped sharing its playback'**
   String get syncHostStopped;
+
+  /// No description provided for @syncInviteAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Make every other device follow this one'**
+  String get syncInviteAll;
+
+  /// No description provided for @syncInviteAllSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote control: they switch over without you touching them'**
+  String get syncInviteAllSubtitle;
+
+  /// No description provided for @syncInvited.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} devices are following now'**
+  String syncInvited(int count);
+
+  /// No description provided for @syncInvitedNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No other device answered'**
+  String get syncInvitedNone;
+
+  /// No description provided for @syncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync problem: {why}'**
+  String syncFailed(String why);
 }
 
 class _AppLocalizationsDelegate

@@ -114,10 +114,56 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   /// those writes must go to the player, never back out as commands.
   bool applyingRemote = false;
 
+  /// Wall clock before which a failed track load is not retried, so an album
+  /// that cannot be opened does not turn into a request per position sample.
+  int _nextLoadAttempt = 0;
+
   @override
   PlaybackSyncState build() {
     ref.onDispose(_teardown);
+    // Installed up front, not when hosting starts: another device may ask this
+    // one to follow at any time, and the service may come up later (the LAN
+    // feature has its own switch), so both are covered.
+    _installFollowHandler();
+    ref.listen(lanControllerProvider, (_, _) => _installFollowHandler());
     return const PlaybackSyncState();
+  }
+
+  void _installFollowHandler() {
+    _service?.onFollowRequest = _onFollowRequest;
+  }
+
+  void _onFollowRequest(LanDevice host) {
+    // Being told to follow is the whole point of the request.
+    unawaited(follow(host));
+  }
+
+  /// One tap on the host: ask every device in the list to follow this one. This
+  /// is the remote-control path — the other devices do not have to be touched,
+  /// which is the difference between "walk to the TV" and "use the phone".
+  Future<void> inviteAll() async {
+    final service = _service;
+    final port = service?.httpPort;
+    final devices = ref.read(lanControllerProvider).value?.devices ?? const [];
+    final l = stringsFor(currentUiLocale);
+    if (service == null || port == null || devices.isEmpty) {
+      state = state.copyWith(status: l.syncInvitedNone);
+      return;
+    }
+    var asked = 0;
+    for (final device in devices) {
+      try {
+        await service.requestFollow(device, port: port);
+        asked++;
+      } catch (_) {
+        // A device that does not answer is simply not invited; the rest still
+        // are, and the count says how many took it.
+      }
+    }
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      status: asked == 0 ? l.syncInvitedNone : l.syncInvited(asked),
+    );
   }
 
   LanService? get _service => ref.read(lanControllerProvider.notifier).service;
@@ -232,6 +278,10 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   // --------------------------------------------------------------- following
 
   Future<void> follow(LanDevice peer) async {
+    // A device cannot both lead and follow in this version, so following
+    // cleanly ends any sharing of our own — including the endpoints on the
+    // service, which a state reset alone would leave running.
+    stopHosting();
     await stopFollowing(keepStatus: true);
     final service = _service;
     if (service == null) {
@@ -386,28 +436,52 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   Future<void> _applyTrack() async {
     final remote = _remote;
     if (remote == null || remote.sameTrack(_applied)) return;
-    _applied = remote;
+    if (_now < _nextLoadAttempt) return;
     applyingRemote = true;
     try {
       final local = ref.read(audioPlayerProvider);
       if (remote.isEmpty) {
+        _applied = remote;
         await local.pause();
         return;
       }
       final album = await ref.read(
         albumDetailProvider((remote.albumId, 0)).future,
       );
-      if (!ref.mounted || !remote.sameTrack(_applied)) return;
+      if (!ref.mounted) return;
       await ref
           .read(playerControllerProvider.notifier)
           .playAlbum(album, startIndex: remote.index);
+      if (!ref.mounted) return;
+      final failure = ref.read(playerControllerProvider).error;
+      if (failure != null) {
+        // The album was found but nothing could be played from it. Say so: a
+        // follower that sits in silence with no explanation is the worst
+        // possible outcome.
+        _applied = null;
+        _nextLoadAttempt = _now + 3000;
+        state = state.copyWith(
+          error: stringsFor(currentUiLocale).syncFailed(failure),
+        );
+        return;
+      }
       // Straight to where the host is, instead of starting at zero and drifting
       // in over the next few seconds.
       final target = _target();
       if (target != null) await local.seek(target);
-    } catch (_) {
-      // A follower that cannot load the album (offline, album gone) simply does
-      // not play: the host keeps broadcasting, and the next track tries again.
+      // Marked as loaded only now: setting this first (as it did before) meant a
+      // failed load was never retried for that track, so the follower stayed
+      // silent for the whole song it could not open.
+      _applied = remote;
+      state = state.copyWith(error: null);
+    } catch (e) {
+      _applied = null;
+      _nextLoadAttempt = _now + 3000;
+      if (ref.mounted) {
+        state = state.copyWith(
+          error: stringsFor(currentUiLocale).syncFailed('$e'),
+        );
+      }
     } finally {
       applyingRemote = false;
     }
@@ -430,6 +504,21 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     final remote = _remote;
     final offset = _clock.offsetMillis;
     if (remote == null || offset == null) return;
+    try {
+      await _apply(remote, offset);
+    } catch (e) {
+      // A correction that throws (no source loaded, player in a bad state) must
+      // not disappear into an unawaited future: it is exactly the kind of
+      // failure the user needs to see rather than a silent follower.
+      if (ref.mounted) {
+        state = state.copyWith(
+          error: stringsFor(currentUiLocale).syncFailed('$e'),
+        );
+      }
+    }
+  }
+
+  Future<void> _apply(PlaybackSnapshot remote, int offset) async {
     final local = ref.read(audioPlayerProvider);
     final advice = adviseSync(
       snapshot: remote,
@@ -492,6 +581,9 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
       _hostGone();
     }
   }
+
+  /// Dismisses the error line once the user has read it.
+  void clearError() => state = state.copyWith(error: null);
 
   void _teardown() {
     _hostSub?.close();

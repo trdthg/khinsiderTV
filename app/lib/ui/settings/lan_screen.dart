@@ -109,11 +109,28 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                                   ? syncNotifier.stopHosting
                                   : syncNotifier.startHosting,
                             ),
+                            if (sync.hosting)
+                              SettingsRow(
+                                icon: Icons.campaign_outlined,
+                                title: l.syncInviteAll,
+                                subtitle: l.syncInviteAllSubtitle,
+                                onSelect: syncNotifier.inviteAll,
+                              ),
+                            if (sync.error != null)
+                              SettingsRow(
+                                icon: Icons.error_outline,
+                                title: l.syncFailed(sync.error!),
+                                danger: true,
+                                onSelect: syncNotifier.clearError,
+                              ),
                             if (sync.following != null) ...[
+                              SettingsRow(
+                                icon: Icons.sync,
+                                title: sync.status ?? l.syncConnecting(''),
+                              ),
                               SettingsRow(
                                 icon: Icons.timer_outlined,
                                 title: l.syncDelayMinus,
-                                subtitle: sync.status,
                                 onSelect: () => syncNotifier.nudgeDelay(
                                   const Duration(milliseconds: -10),
                                 ),

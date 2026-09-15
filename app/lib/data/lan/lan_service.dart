@@ -169,6 +169,12 @@ class LanService {
   /// which is why this only ever runs on the host.
   void Function(String action, int? positionMillis)? onPlaybackCommand;
 
+  /// Another device asked this one to start following *it* (its user tapped
+  /// "make every other device follow this one"). The address comes from the
+  /// connection rather than the payload, so a peer cannot point us at somebody
+  /// else on the LAN.
+  void Function(LanDevice host)? onFollowRequest;
+
   /// Advertised in the beacon as `pb`, so the other device's list can offer to
   /// follow without contacting this one first.
   bool hostingPlayback = false;
@@ -613,6 +619,36 @@ class LanService {
         });
         return;
       }
+      if (request.method == 'POST' && path == '/kh/playback/follow') {
+        final raw = await utf8.decoder.bind(request).join();
+        final handler = onFollowRequest;
+        final decoded = raw.isEmpty ? null : jsonDecode(raw);
+        final id = decoded is Map && decoded['id'] is String
+            ? decoded['id']! as String
+            : '';
+        final port = decoded is Map && decoded['port'] is int
+            ? decoded['port']! as int
+            : 0;
+        final address = request.connectionInfo?.remoteAddress.address ?? '';
+        if (handler == null || id.isEmpty || port == 0 || address.isEmpty) {
+          await _writeJson(response, const {
+            'error': 'cannot follow',
+          }, status: HttpStatus.badRequest);
+          return;
+        }
+        handler(
+          LanDevice(
+            id: id,
+            name: decoded is Map && decoded['name'] is String
+                ? decoded['name']! as String
+                : address,
+            host: address,
+            port: port,
+          ),
+        );
+        await _writeJson(response, {'ok': true, 'name': deviceName});
+        return;
+      }
       if (request.method == 'GET' && path == '/kh/favorites') {
         await _writeJson(response, {'favorites': await readFavorites()});
         return;
@@ -875,6 +911,16 @@ class LanService {
       client.close(force: true);
     }
   }
+
+  /// Asks [peer] to start following this device. This is what makes the
+  /// one-tap "make every other device follow this one" work from a phone: the
+  /// other device is told where this one lives and connects back by itself.
+  Future<void> requestFollow(LanDevice peer, {required int port}) => _request(
+    peer,
+    'POST',
+    '/kh/playback/follow',
+    payload: {'id': deviceId, 'name': deviceName, 'port': port},
+  );
 
   /// Re-probes [peer] by address and returns its refreshed entry, or null when
   /// nothing answered.

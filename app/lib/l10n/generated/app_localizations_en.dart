@@ -892,4 +892,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get syncHostStopped => 'The other device stopped sharing its playback';
+
+  @override
+  String get syncInviteAll => 'Make every other device follow this one';
+
+  @override
+  String get syncInviteAllSubtitle =>
+      'Remote control: they switch over without you touching them';
+
+  @override
+  String syncInvited(int count) {
+    return '$count devices are following now';
+  }
+
+  @override
+  String get syncInvitedNone => 'No other device answered';
+
+  @override
+  String syncFailed(String why) {
+    return 'Sync problem: $why';
+  }
 }
