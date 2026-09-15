@@ -186,7 +186,12 @@ class PlayerController extends Notifier<PlayerState>
             currentIndex: _implIndexToAlbumIndex(snap.currentIndex),
           );
           unawaited(_prefetchNext());
-          if (snap.completed) unawaited(_loopAlbum());
+          // Never while following: the host decides what plays next, and a
+          // follower that loops its album by itself ends up on track 1 while
+          // the host is on track 9 — which is read, correctly, as a drift of
+          // tens of seconds. This was that: the drift only looked right in the
+          // moments the two happened to be near the same place.
+          if (snap.completed && !_isFollower) unawaited(_loopAlbum());
         }),
       )
       ..add(
@@ -574,6 +579,8 @@ class PlayerController extends Notifier<PlayerState>
   /// finished. Guarded because `completed` is pushed on every snapshot of that
   /// state, and reloading the album mid-reload would fight itself.
   Future<void> _loopAlbum() async {
+    // Belt and braces: any path into here must respect the host's queue.
+    if (_isFollower) return;
     final album = _playingAlbum;
     if (album == null || album.tracks.isEmpty || _looping) return;
     _looping = true;

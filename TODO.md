@@ -1155,3 +1155,13 @@
       阈值 1.5s → **400ms**、冷却 20s → **6s**。
 - [x] 教训：**播放器控制调用绝不能在同步循环里 await**；`play()` 的语义是「等播放结束」。
 
+## AJ. 未发布（v0.3.12）：跟随端会自己偷偷换歌
+
+用户反馈：「有时确实是十几ms的延迟，但大多数时候还是几万几万ms」。
+
+- [x] **根因**：`PlayerController` 的 `snap.completed → _loopAlbum()` **没有跟随守卫** —— 跟随端一首放完后会
+      自己跳回专辑第一首，而主机还在第 9 首 → 偏差几万 ms；恰好接近时才显示十几 ms。
+      传输键（play/pause/next/previous/seek）都转发给主机了，唯独这条**内部**路径漏了。
+- [x] 修法：`snap.completed && !_isFollower` 才循环，并在 `_loopAlbum()` 入口再加一道 `if (_isFollower) return;`。
+- [x] 教训：跟随端**任何**改变「播什么/播到哪」的内部路径都要过 `_isFollower`，不只是用户能按到的按钮。
+
