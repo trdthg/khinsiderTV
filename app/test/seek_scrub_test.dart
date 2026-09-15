@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
@@ -82,6 +83,9 @@ void main() {
           )).overrideWith((ref) async => longTitleAlbum()),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: AlbumScreen(albumId: 'long-title-album'),
         ),
       ),

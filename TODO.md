@@ -991,3 +991,48 @@
 版本 —— 后者最可能，因为安卓的安装一直是坏的，用户很可能根本没装上 v0.3.2。所以这一轮的重点是让
 **应用自己给出结论**，而不是继续猜。
 
+## AB. 未发布（v0.3.4）：多语言（默认英语，可切简体中文）
+
+需求：设置菜单里能改语言，**默认英语**，可以切成简体中文。
+
+- [x] 用 Flutter 官方的 `gen_l10n` + ARB：`lib/l10n/app_en.arb`（模板）+ `app_zh.arb`，175 条文案，
+      生成到 `lib/l10n/generated/`（随源码提交，CI 里照样会重新生成）。
+- [x] **默认英语，而且不跟随系统**：`localeControllerProvider` 还没读出来（或读取失败）时用 `en`。
+      如果让它回落到系统语言，中文手机第一帧会先闪一下中文再变英文 —— 用户明确要的是「默认英语」。
+- [x] 设置在「设置」页顶部的语言分组里：`English` / `简体中文` 两行，当前项打勾，点一下立刻生效并写入
+      JSON KV 存储（重启后保持）。没有弹窗，和局域网分组的展开式一致。
+- [x] 没有 `BuildContext` 的 service/controller（`LanService`/`LanController`/`UpdateService`/
+      `UpdateController`）拿的是 `AppLocalizations Function()` **getter 而不是实例** —— 否则它们会
+      抓住启动时的语言，切换语言后那些提示还是旧语言。
+- [x] 覆盖 9 个文件里全部**当前是中文**的文案：设置、缓存、局域网、更新/安装、搜索页的设置按钮。
+- [x] 测试：所有 `MaterialApp` 补上 `localizationsDelegates` / `supportedLocales` / `locale: en`，
+      断言从中文字符串改成 `app_en.arb` 里的英文。
+
+### 第二波：本来已经是英文的界面也补上中文
+
+只把「现在是中文的」变成可切换还不够 —— 专辑页、播放器 OSD、搜索页、通知栏按钮、Music 目录授权
+弹窗本来就是英文，切到中文后它们还是英文。所以又补了 40 条：
+
+- [x] 专辑页 / 导出页：`album*` + `export*`（播放键、详情页、缓存目录提示、导出进度、复制说明、
+      收藏按钮「Favorite / In favorites」）。
+- [x] 播放器 OSD：`action*`（上一个/下一个/播放/暂停/停止）+ `osdAudioQuality`、`osdTheme`。
+- [x] 搜索页：`searchHint`/`searchNoResults`/`searchClearHistory`/`searchRecentSearches`/
+      `searchFavorites`/`searchRecentlyViewed`/`searchIdleTip`。
+- [x] 通知栏（媒体会话）：`KhinsiderAudioHandler` 在 `main` 里、widget 树之前就建好了，拿不到
+      `BuildContext` 也拿不到 Riverpod ref，所以 `l10n.dart` 里有一个 `currentUiLocale` 全局，
+      由 `KhinsiderApp.build` 每次刷新 —— 这是它存在的**唯一**理由，别在别处用。
+- [x] Music 目录授权弹窗的正文与提示。
+- [x] `settingsNewVersion` 的英文必须是 "New version {version}" 而不是
+      "Version {version} is available" —— 后者和 `settingsUpdateFound` 撞成同一句话，屏幕上会出现
+      两句一模一样的版本号（中文的「新版本 / 发现新版本」不会撞）。
+
+### 有意保留英文、没有做进 ARB
+
+- 主题色名（`AppTheme.names`：Violet / Blue / …）—— 它们是色板 tooltip 里的颜色名，和 `MP3`/`FLAC`
+  一样属于固定名词。ARB 的 resource array 不支持（`gen_l10n` 会报 “The value ... is not a string”），
+  要做就得加 6 个 key + 一个下标映射，暂时不值。
+
+### 尚未覆盖（下一轮候选）
+
+专辑页、播放器、搜索结果等界面**现在就全是英文**，两种语言下都显示英文 —— 这一轮先把「现在是中文的」
+部分变成可切换；要不要把这些也翻成中文，等用户说了再做。

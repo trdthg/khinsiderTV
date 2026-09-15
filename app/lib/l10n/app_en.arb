@@ -1,0 +1,786 @@
+{
+  "@@locale": "en",
+  "updateIncompleteDownload": "The download was incomplete ({actual} / {expected}), so it was deleted. Please try again.",
+  "@updateIncompleteDownload": {
+    "placeholders": {
+      "actual": {
+        "type": "String"
+      },
+      "expected": {
+        "type": "String"
+      }
+    }
+  },
+  "updateEmptyDownload": "The downloaded file is empty. Please try again.",
+  "updateNotAPackage": "What was downloaded is not an installer (the contents are damaged), so it was deleted. Please try again.",
+  "updateWaitingForConfirmation": "Waiting for you to confirm the install on the system screen",
+  "updateInstalled": "Installed",
+  "updateFailedWithMessage": "Install failed: {message}",
+  "@updateFailedWithMessage": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedNoMessage": "Install failed",
+  "updateBlockedByPolicy": "The system blocked the install, which usually means \"install unknown apps\" is not allowed yet",
+  "updateAborted": "The system cancelled the install: its confirmation screen never completed",
+  "updateInvalidPackage": "The installer is not valid (the download may be incomplete). Please try again.",
+  "updateSignatureConflict": "The installed version conflicts with this installer: the signatures differ, so the old version has to be uninstalled first",
+  "updateNoSpace": "There is not enough storage on this device. Free some space first.",
+  "updateIncompatible": "This installer is not compatible with this device",
+  "updateFailedWithStatus": "Install failed ({status}): {message}",
+  "@updateFailedWithStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedWithStatusNoMessage": "Install failed ({status})",
+  "@updateFailedWithStatusNoMessage": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "updateCheckFailed": "Could not check for updates: {error}",
+  "@updateCheckFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloadFailed": "Download failed: {error}",
+  "@updateDownloadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateExtractFailed": "Could not unpack the update: {error}",
+  "@updateExtractFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNeedInstallPermission": "Android has not allowed this app to install apps yet. Turn that on first.",
+  "updateOpenInstallerFailed": "Could not open the installer: {error}",
+  "@updateOpenInstallerFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateHandedToInstaller": "Handed to the system installer — confirm it on the system screen",
+  "settingsTitle": "Settings",
+  "settingsUpdate": "Updates",
+  "settingsCheckUpdate": "Check for updates",
+  "settingsNewVersion": "New version {version}",
+  "@settingsNewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsOpenReleasePage": "Open the release page",
+  "settingsStorage": "Storage",
+  "settingsCache": "Cache",
+  "settingsCacheSubtitle": "Usage, clearing everything, deleting one album",
+  "settingsLan": "LAN",
+  "settingsLanSubtitle": "Sync across devices",
+  "settingsLanSubtitleLong": "Sync favorites between devices on the same WiFi, or play together",
+  "settingsAbout": "About",
+  "settingsVersion": "Version v{version}",
+  "@settingsVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsGitHubRepo": "GitHub repository",
+  "settingsChecking": "Checking…",
+  "settingsUpdateFound": "Version {version} is available",
+  "@settingsUpdateFound": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUpToDate": "Up to date",
+  "settingsFromReleases": "The latest version comes from GitHub Releases",
+  "settingsDownloading": "Downloading {percent}%",
+  "@settingsDownloading": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsWillOpenInstaller": "The installer opens by itself when the download finishes",
+  "settingsExtracting": "Unpacking…",
+  "settingsReadyToRestart": "Restart to apply it once this finishes",
+  "settingsRestartAndUpdate": "Restart and update",
+  "settingsReadySubtitle": "The new version is downloaded: restarting applies it",
+  "settingsInstall": "Install",
+  "settingsRetryInstall": "Retry install",
+  "settingsDownloadedWithSize": "Package downloaded ({size}). Tap to open the system installer.",
+  "@settingsDownloadedWithSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDownloaded": "Package downloaded. Tap to open the system installer.",
+  "settingsUseSystemInstaller": "Use the system installer",
+  "settingsUseSystemInstallerSubtitle": "Hand the package over the other way (use this when the install session keeps failing)",
+  "settingsAllowUnknownSources": "Allow installing unknown apps",
+  "settingsAllowUnknownSourcesSubtitle": "Allow it, come back here, then tap \"Retry install\"",
+  "settingsDownloadFailed": "Download failed",
+  "settingsPleaseRetry": "Please try again",
+  "settingsRetry": "Retry",
+  "settingsUseReleasePage": "On this platform, download from the release page",
+  "settingsNoAutoUpdate": "There is no automatic update package for this platform",
+  "settingsDownloadAndInstall": "Download and install",
+  "settingsUniversalPackage": "Universal package",
+  "settingsAutoInstallNote": "Installs itself once downloaded, no questions asked",
+  "settingsLanguage": "Language",
+  "settingsLanguageSubtitle": "Interface language",
+  "languageEnglish": "English",
+  "languageChinese": "简体中文",
+  "cacheClearing": "Clearing…",
+  "cacheCleared": "Cleared {size}",
+  "@cacheCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheNothingToClear": "There is nothing cached to clear",
+  "cacheClearFailed": "Could not clear: {error}",
+  "@cacheClearFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearingSearch": "Clearing the search cache…",
+  "cacheSearchCleared": "Search cache cleared: {size}",
+  "@cacheSearchCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheSearchAlreadyEmpty": "The search cache was already empty",
+  "cacheClearingImages": "Clearing the image cache…",
+  "cacheImagesCleared": "Image cache cleared: {size}",
+  "@cacheImagesCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheImagesAlreadyEmpty": "The image cache was already empty",
+  "cacheDeleting": "Deleting {album}…",
+  "@cacheDeleting": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheDeleted": "Deleted {album} ({size})",
+  "@cacheDeleted": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheDeleteFailed": "Could not delete: {error}",
+  "@cacheDeleteFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheTitle": "Cache",
+  "cacheLocation": "Location",
+  "cachePublicMusic": "A public Music folder: these files are also the albums exported to Music",
+  "cacheAppPrivate": "A private app folder",
+  "cacheUsage": "Usage",
+  "cacheNoAlbums": "No albums cached yet",
+  "cacheAlbumCount": "{count} albums · {size}",
+  "@cacheAlbumCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheSearchUsage": "Search {size}",
+  "@cacheSearchUsage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheImageUsage": "Images {size}",
+  "@cacheImageUsage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearAll": "Clear all caches",
+  "cacheClearAllMusicSubtitle": "Deletes everything under Music/KHInsider, exported albums included",
+  "cacheClearAllSubtitle": "Deletes every downloaded album file",
+  "cacheOther": "Other caches",
+  "cacheSearchAndPages": "Search and page cache",
+  "cacheSearchPagesSubtitle": "{size} · search results and album pages",
+  "@cacheSearchPagesSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearSearch": "Clear the search cache",
+  "cacheImages": "Image cache",
+  "cacheImagesSubtitle": "{size} · cover thumbnails",
+  "@cacheImagesSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearImages": "Clear the image cache",
+  "cacheCachedAlbums": "Cached albums",
+  "cacheFileCount": "{count} files",
+  "@cacheFileCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheDownloading": "Downloading",
+  "cacheDeleteAlbum": "Delete the cache for {album}",
+  "@cacheDeleteAlbum": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      }
+    }
+  },
+  "actionBack": "Back",
+  "searchSettings": "Settings",
+  "searchSettingsWithUpdate": "Settings (an update is available)",
+  "lanTitle": "Sync across devices",
+  "lanThisDevice": "This device",
+  "lanDeviceNameHint": "This is the name other devices see",
+  "lanThisDeviceFavorites": "{count} favorites on this device",
+  "@lanThisDeviceFavorites": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanEnabled": "LAN sync is on",
+  "lanDisabled": "LAN sync is off",
+  "lanEnabledSubtitle": "Devices on the same WiFi can find each other",
+  "lanStarting": "Starting…",
+  "lanDisabledSubtitle": "No ports are open while this is off",
+  "lanDevicesOnWifi": "Devices on the same WiFi",
+  "lanRefresh": "Refresh",
+  "lanNoDevices": "No devices found yet",
+  "lanBothDevicesNote": "Both devices need this app open on the same WiFi;",
+  "lanManualHint": "if the network blocks broadcasts, type an address below",
+  "lanAddManually": "Add an address manually",
+  "lanIpAddress": "The other device's IP address",
+  "lanIpHint": "Use this when the search finds nothing (for example 192.168.1.23)",
+  "lanAdd": "Add",
+  "lanLocalAddress": "This device: {address} — both devices must be on the same network with the other app still running.",
+  "@lanLocalAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "lanMergeExplain": "A normal sync only merges: albums either side is missing are added, and nothing is ever deleted.",
+  "lanOverwriteExplain": "A force overwrite replaces one side's favorites with the other's. The replaced side loses its favorites, so it needs a second tap to confirm.",
+  "lanAddressPending": "{host} (address not confirmed)",
+  "@lanAddressPending": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanFavoritesCount": "{count} favorites",
+  "@lanFavoritesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanTestConnection": "Test connection",
+  "lanTestConnectionSubtitle": "Only probes this device, changes nothing",
+  "lanSendToDevice": "Send this device's favorites to {name}",
+  "@lanSendToDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanMergeOnly": "Adds only",
+  "lanPullFromDevice": "Merge {name}'s favorites into this device",
+  "@lanPullFromDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePush": "Force: replace {name}'s favorites with this device's",
+  "@lanForcePush": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePushConfirm": "Tap again: overwrite {name}'s favorites",
+  "@lanForcePushConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPeerLoses": "The other device's favorites are deleted",
+  "lanForcePull": "Force: replace this device's favorites with {name}'s",
+  "@lanForcePull": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePullConfirm": "Tap again: overwrite this device's favorites",
+  "lanLocalLoses": "This device's favorites are deleted",
+  "lanRemoveManual": "Remove the manual address {host}",
+  "@lanRemoveManual": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanTapToConfirm": "Runs on tap; cancels if it is not tapped again within 5 seconds",
+  "lanDiagAt": "(port {port})",
+  "@lanDiagAt": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "lanDiagAtVersion": "(port {port}, v{version})",
+  "@lanDiagAtVersion": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      },
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagNoAnswer": "{name} did not answer the address probe{at}: the other device may have quit, may be on a different network, or the router is blocking UDP as well.",
+  "@lanDiagNoAnswer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagTcpBlocked": "{name} answered the address probe{at}, but its API is unreachable: a firewall, the router's client isolation, or the other app having been suspended.",
+  "@lanDiagTcpBlocked": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagOk": "{name} is fine{at}, with {count} favorites.",
+  "@lanDiagOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanStartFailed": "Could not start the LAN service: {error}",
+  "@lanStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanEnterAddress": "Enter an address",
+  "lanNoAnswerFrom": "No answer from {address}",
+  "@lanNoAnswerFrom": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreadableResponse": "The other device sent something this app cannot read",
+  "lanAnotherDevice": "another device",
+  "lanRefusedHint": "The port refused the connection: nothing is listening there any more (the port is reassigned every time the app starts, so the other device may have just restarted).",
+  "lanTimeoutHint": "The other device did not answer over TCP: its app may have left the foreground (suspended), or a firewall or the router's client isolation is blocking TCP — a working UDP with a failing TCP is exactly that. Open this page on both devices and try again.",
+  "lanUnreachableNoPort": "Cannot reach {name} ({host}): its address is not confirmed yet and the address probe did not answer either. Keep the other app running and make sure both devices are on the same network.",
+  "@lanUnreachableNoPort": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreachableSeen": "Cannot reach {name} ({host}:{port}): {error}\nIt shows up in broadcasts, but its service port does not answer.",
+  "@lanUnreachableSeen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreachableAfterRetry": "Cannot reach {name} ({host}:{port}): {error}",
+  "@lanUnreachableAfterRetry": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanBadStatus": "The other device answered {status}",
+  "@lanBadStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "lanDeviceAndroid": "Android device {suffix}",
+  "@lanDeviceAndroid": {
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDeviceApple": "Apple device {suffix}",
+  "@lanDeviceApple": {
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "lanStatusOverwrittenByPeer": "{peer} replaced this device's favorites: {total} now",
+  "@lanStatusOverwrittenByPeer": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanStatusMergedFromPeer": "{peer} synced {added} favorites over; this device now has {total}",
+  "@lanStatusMergedFromPeer": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanServiceNotRunning": "The LAN service is not running",
+  "lanTestingDevice": "Testing {name}…",
+  "@lanTestingDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanSearchingDevices": "Looking for devices on the same WiFi…",
+  "lanNoOtherDevices": "No other devices found (the other one needs this app open too)",
+  "lanFoundDevices": "Found {count} devices",
+  "@lanFoundDevices": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanAddedDevice": "Added {name}",
+  "@lanAddedDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanRemovedHost": "Removed {host}",
+  "@lanRemovedHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanOverwritingDevice": "Replacing {name}'s favorites with this device's…",
+  "@lanOverwritingDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanSendingToDevice": "Sending to {name}…",
+  "@lanSendingToDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPushedOverwrite": "Replaced {peer} with this device's {count} favorites; it now has {total}",
+  "@lanPushedOverwrite": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanPushedMerge": "Sent {count} favorites to {peer}, which added {added} (it now has {total})",
+  "@lanPushedMerge": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanOverwritingLocal": "Replacing this device's favorites with {name}'s…",
+  "@lanOverwritingLocal": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanReadingFromDevice": "Reading from {name}…",
+  "@lanReadingFromDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPulledOverwrite": "Replaced this device's favorites with {peer}'s: {total} now",
+  "@lanPulledOverwrite": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanPulledMerge": "Merged {peer}'s favorites: {added} new, {total} now on this device",
+  "@lanPulledMerge": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPrevious": "Previous",
+  "actionNext": "Next",
+  "actionPlay": "Play",
+  "actionPause": "Pause",
+  "actionStop": "Stop",
+  "actionRetry": "Retry",
+  "actionSearch": "Search",
+  "actionDone": "Done",
+  "albumLoadFailed": "Failed to load album:\n{error}",
+  "@albumLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "albumForceRefresh": "Force refresh (bypass cache)",
+  "albumDetailsTab": "Details",
+  "albumDetailsTitle": "Album details",
+  "albumExportHint": "Export cached tracks to the system Music folder",
+  "albumSaveHint": "Save the cache in the system Music folder",
+  "albumCopyPath": "Copy cache folder path",
+  "albumCopied": "Copied: {path}",
+  "@albumCopied": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "albumExport": "Export to Music",
+  "osdAudioQuality": "Audio quality",
+  "osdTheme": "Theme",
+  "osdThemeWithTooltip": "Theme {tooltip}",
+  "@osdThemeWithTooltip": {
+    "placeholders": {
+      "tooltip": {
+        "type": "String"
+      }
+    }
+  },
+  "searchHint": "Search game soundtracks…",
+  "searchClearHistory": "Clear history",
+  "searchFavorites": "Favorites",
+  "searchRecentlyViewed": "Recently viewed",
+  "searchNoResults": "No albums found.",
+  "searchRecentSearches": "Recent searches",
+  "searchIdleTip": "Search KHInsider for game soundtracks.\nTip: navigate with the D-Pad / gamepad.",
+  "musicFolderQuestion": "Save songs in the system Music folder?",
+  "musicNotNow": "Not now",
+  "musicOpenSettings": "Open settings",
+  "albumTrackCount": "{count} tracks",
+  "@albumTrackCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumFavorite": "Favorite",
+  "albumInFavorites": "In favorites",
+  "albumPlayedSavedTo": "Played tracks are saved to Music/KHInsider",
+  "albumCacheKeptHere": "Cached files are kept here so you can find, export, delete or play them with any other player.",
+  "albumCopyExplain": "Copy the downloaded tracks into Music/KHInsider. No permission needed.",
+  "exportCopyingExplain": "Copying the downloaded tracks into Music/KHInsider. No permission needed.",
+  "exportLookingForCached": "Looking for cached tracks…",
+  "exportProgress": "{done} / {total} tracks",
+  "@exportProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "musicFolderBody": "Android only lets an app write into Music/ once you grant it \"all files access\" — the next screen has that switch for KHInsider.\n\nDownloads then land in Music/KHInsider, where your file manager, other players and your computer can see them. Tracks that are already downloaded stay in the app folder until you delete or move them.",
+  "musicFolderDenied": "Turn on \"all files access\", then come back: new downloads go to Music/KHInsider."
+}

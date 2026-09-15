@@ -7,6 +7,9 @@ import 'package:khinsider_api/khinsider_api.dart';
 import '../data/lan/lan_device.dart';
 import '../data/lan/lan_service.dart';
 import '../data/preferences_store.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../l10n/l10n.dart';
+import 'locale_controller.dart';
 import 'update_controller.dart';
 
 const _kLanEnabled = 'lan_enabled';
@@ -88,12 +91,13 @@ class LanState {
 /// is a real name on desktop and useless ("localhost") on Android, so phones
 /// and TVs get a platform label plus a slice of their id — two devices of the
 /// same kind must not look identical in the list.
-String defaultLanDeviceName(String id) {
+String defaultLanDeviceName(String id, [AppLocalizations? strings]) {
+  final l = strings ?? stringsFor(null);
   final suffix = id.length >= 4 ? id.substring(0, 4) : id;
   final host = Platform.localHostname;
   if (host.isNotEmpty && host != 'localhost' && host != 'android') return host;
-  if (Platform.isAndroid) return '安卓设备 $suffix';
-  if (Platform.isIOS) return '苹果设备 $suffix';
+  if (Platform.isAndroid) return l.lanDeviceAndroid(suffix);
+  if (Platform.isIOS) return l.lanDeviceApple(suffix);
   if (Platform.isMacOS) return 'Mac $suffix';
   if (Platform.isWindows) return 'Windows $suffix';
   if (Platform.isLinux) return 'Linux $suffix';
@@ -105,6 +109,11 @@ class LanController extends AsyncNotifier<LanState> {
   LanService? _service;
   StreamSubscription<List<LanDevice>>? _devicesSub;
 
+  /// The strings for the language in effect right now. Read lazily at each call
+  /// so a language change is picked up without rebuilding the service.
+  AppLocalizations get _strings =>
+      stringsFor(ref.read(localeControllerProvider));
+
   @override
   Future<LanState> build() async {
     final store = await ref.watch(jsonKvStoreProvider.future);
@@ -114,7 +123,11 @@ class LanController extends AsyncNotifier<LanState> {
       store.write(_kLanDeviceId, id);
     }
     final name =
-        store.read<String>(_kLanDeviceName) ?? defaultLanDeviceName(id);
+        store.read<String>(_kLanDeviceName) ??
+        defaultLanDeviceName(
+          id,
+          stringsFor(ref.read(localeControllerProvider)),
+        );
     final manual = store.readList<String>(_kLanManualHosts).toSet();
     final enabled = store.read<bool>(_kLanEnabled) ?? true;
 
@@ -144,14 +157,19 @@ class LanController extends AsyncNotifier<LanState> {
       },
       mergeFavorites: _mergeIncoming,
       replaceFavorites: _replaceIncoming,
+      strings: () => stringsFor(ref.read(localeControllerProvider)),
       onRemoteSync: (result) {
         if (!ref.mounted) return;
+        final l = _strings;
         _patch(
           (s) => s.copyWith(
             status: result.replaced
-                ? '${result.peer} 用它的收藏覆盖了本机：现在有 ${result.total} 张'
-                : '${result.peer} 同步过来 ${result.added} 张收藏，'
-                      '本机现有 ${result.total} 张',
+                ? l.lanStatusOverwrittenByPeer(result.peer, result.total)
+                : l.lanStatusMergedFromPeer(
+                    result.peer,
+                    result.added,
+                    result.total,
+                  ),
           ),
         );
       },
@@ -210,21 +228,25 @@ class LanController extends AsyncNotifier<LanState> {
   /// Probes one device and then calls its API, and says which half worked.
   /// This is the answer to "it says it cannot connect", and it names the fix.
   Future<void> testConnection(LanDevice device) async {
+    final l = _strings;
     final service = _service;
     if (service == null) {
-      _patch((s) => s.copyWith(error: '局域网服务没有在运行'));
+      _patch((s) => s.copyWith(error: l.lanServiceNotRunning));
       return;
     }
     _patch(
-      (s) =>
-          s.copyWith(busy: true, status: '正在测试 ${device.name}…', error: null),
+      (s) => s.copyWith(
+        busy: true,
+        status: l.lanTestingDevice(device.name),
+        error: null,
+      ),
     );
     final result = await service.diagnose(device);
     if (!ref.mounted) return;
     _patch(
       (s) => s.copyWith(
         busy: false,
-        status: result.describe(device.name),
+        status: result.describe(device.name, l),
         error: result.ok ? null : ' ',
       ),
     );
@@ -236,9 +258,10 @@ class LanController extends AsyncNotifier<LanState> {
   void setWatching(bool watching) => _service?.setWatching(watching);
 
   Future<void> refresh() async {
+    final l = _strings;
     final service = _service;
     if (service == null) return;
-    _patch((s) => s.copyWith(busy: true, status: '正在搜索同一 WiFi 下的设备…'));
+    _patch((s) => s.copyWith(busy: true, status: l.lanSearchingDevices));
     await service.refresh();
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!ref.mounted) return;
@@ -246,12 +269,13 @@ class LanController extends AsyncNotifier<LanState> {
     _patch(
       (s) => s.copyWith(
         busy: false,
-        status: count == 0 ? '没有发现其它设备（对方也要打开本应用）' : '发现 $count 台设备',
+        status: count == 0 ? l.lanNoOtherDevices : l.lanFoundDevices(count),
       ),
     );
   }
 
   Future<void> addManual(String host) async {
+    final l = _strings;
     final service = _service;
     if (service == null) return;
     _patch((s) => s.copyWith(busy: true, error: null));
@@ -264,7 +288,7 @@ class LanController extends AsyncNotifier<LanState> {
         (s) => s.copyWith(
           busy: false,
           manualHosts: hosts,
-          status: '已添加 ${device.name}',
+          status: l.lanAddedDevice(device.name),
         ),
       );
     } catch (e) {
@@ -273,22 +297,28 @@ class LanController extends AsyncNotifier<LanState> {
   }
 
   Future<void> removeManual(String host) async {
+    final l = _strings;
     _service?.removeManual(host);
     final store = await ref.read(jsonKvStoreProvider.future);
     final hosts = {...?state.value?.manualHosts}..remove(host);
     store.write(_kLanManualHosts, hosts.toList());
-    _patch((s) => s.copyWith(manualHosts: hosts, status: '已移除 $host'));
+    _patch(
+      (s) => s.copyWith(manualHosts: hosts, status: l.lanRemovedHost(host)),
+    );
   }
 
   /// Send this device's favorites to [device]; it merges them into its own.
   /// With [replace] the other side ends up with exactly this list.
   Future<void> pushFavorites(LanDevice device, {bool replace = false}) async {
+    final l = _strings;
     final service = _service;
     if (service == null) return;
     _patch(
       (s) => s.copyWith(
         busy: true,
-        status: replace ? '正在用本机收藏覆盖 ${device.name}…' : '正在发送到 ${device.name}…',
+        status: replace
+            ? l.lanOverwritingDevice(device.name)
+            : l.lanSendingToDevice(device.name),
         error: null,
       ),
     );
@@ -300,10 +330,13 @@ class LanController extends AsyncNotifier<LanState> {
         (s) => s.copyWith(
           busy: false,
           status: replace
-              ? '已用本机的 ${local.length} 张收藏覆盖 ${result.peer}，'
-                    '对方现在有 ${result.total} 张'
-              : '已发送 ${local.length} 张收藏到 ${result.peer}，'
-                    '对方新增 ${result.added} 张（现有 ${result.total} 张）',
+              ? l.lanPushedOverwrite(result.peer, local.length, result.total)
+              : l.lanPushedMerge(
+                  result.peer,
+                  local.length,
+                  result.added,
+                  result.total,
+                ),
         ),
       );
     } catch (e) {
@@ -314,14 +347,15 @@ class LanController extends AsyncNotifier<LanState> {
   /// Pull [device]'s favorites into this device. With [replace] the local list
   /// is overwritten, so anything the other device does not have is dropped.
   Future<void> pullFavorites(LanDevice device, {bool replace = false}) async {
+    final l = _strings;
     final service = _service;
     if (service == null) return;
     _patch(
       (s) => s.copyWith(
         busy: true,
         status: replace
-            ? '正在用 ${device.name} 的收藏覆盖本机…'
-            : '正在从 ${device.name} 读取…',
+            ? l.lanOverwritingLocal(device.name)
+            : l.lanReadingFromDevice(device.name),
         error: null,
       ),
     );
@@ -332,9 +366,8 @@ class LanController extends AsyncNotifier<LanState> {
         (s) => s.copyWith(
           busy: false,
           status: replace
-              ? '已用 ${result.peer} 的收藏覆盖本机：现在有 ${result.total} 张'
-              : '${result.peer} 的收藏已合并：新增 ${result.added} 张，'
-                    '本机现有 ${result.total} 张',
+              ? l.lanPulledOverwrite(result.peer, result.total)
+              : l.lanPulledMerge(result.peer, result.added, result.total),
         ),
       );
     } catch (e) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
 import 'package:khinsider/ui/search/search_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
@@ -24,7 +25,12 @@ void main() {
         overrides: [
           kh.searchControllerProvider.overrideWith(SeededSearchController.new),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();
@@ -50,7 +56,12 @@ void main() {
         overrides: [
           kh.searchControllerProvider.overrideWith(SeededSearchController.new),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();

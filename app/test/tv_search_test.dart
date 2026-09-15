@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/platform/device.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
 import 'package:khinsider/state/update_controller.dart';
 import 'package:khinsider/ui/search/search_screen.dart';
@@ -43,7 +44,12 @@ void main() {
           // The settings gear watches this; keep the check out of the test.
           updateControllerProvider.overrideWith(QuietUpdateController.new),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();
@@ -110,7 +116,7 @@ void main() {
 
     // The bar is the app's only permanent chrome, so this is where Settings
     // lives (the album page is a full-screen detail view).
-    expect(find.byTooltip('设置'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
   });
 
   testWidgets('the Search button submits what was typed', (tester) async {

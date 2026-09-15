@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
@@ -69,7 +70,12 @@ Future<void> pumpWide(WidgetTester tester) async {
           0,
         )).overrideWith((ref) async => album),
       ],
-      child: const MaterialApp(home: AlbumScreen(albumId: 'long-title-album')),
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
+        home: AlbumScreen(albumId: 'long-title-album'),
+      ),
     ),
   );
   for (var i = 0; i < 6; i++) {

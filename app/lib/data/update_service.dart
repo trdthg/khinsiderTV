@@ -6,12 +6,20 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/generated/app_localizations.dart';
+import '../l10n/l10n.dart';
+
 /// GitHub release update check.
 ///
 /// Looks at the latest published release of the repo and compares it with
 /// the running app version. Pure data — UI decides how to present it.
 class UpdateService {
-  UpdateService({required this.repoSlug});
+  UpdateService({required this.repoSlug, AppLocalizations Function()? strings})
+    : _strings = strings ?? (() => stringsFor(null));
+
+  /// The getter is stored rather than its result, so a language change is
+  /// picked up by the next message instead of needing a new service.
+  final AppLocalizations Function() _strings;
 
   final _installResults = StreamController<InstallResult>.broadcast();
   bool _hostHandlerAttached = false;
@@ -45,7 +53,7 @@ class UpdateService {
     final status = args is Map ? (args['status'] as num?)?.toInt() : null;
     final message = args is Map ? args['message'] as String? : null;
     if (status == null) return null;
-    _installResults.add(InstallResult(status, message));
+    _installResults.add(InstallResult(status, message, strings: _strings));
     return null;
   }
 
@@ -184,17 +192,17 @@ class UpdateService {
   ///
   /// A truncated response is the classic cause on a TV: the write succeeds and
   /// the byte count silently falls short.
-  static Future<void> _verifyDownload(File file, UpdateAsset asset) async {
+  Future<void> _verifyDownload(File file, UpdateAsset asset) async {
     final actual = await file.length();
     if (asset.size > 0 && actual != asset.size) {
       await _discard(file);
       throw LanFreeUpdateException(
-        '下载不完整（${_mb(actual)} / ${_mb(asset.size)}），已删除，请重试',
+        _strings().updateIncompleteDownload(_mb(actual), _mb(asset.size)),
       );
     }
     if (actual < 4) {
       await _discard(file);
-      throw const LanFreeUpdateException('下载的文件是空的，请重试');
+      throw LanFreeUpdateException(_strings().updateEmptyDownload);
     }
     // An APK (and every zip) starts with the local file header signature.
     final head = await file
@@ -206,7 +214,7 @@ class UpdateService {
         head[2] != 0x03 ||
         head[3] != 0x04) {
       await _discard(file);
-      throw const LanFreeUpdateException('下载到的不是安装包（内容损坏），已删除，请重试');
+      throw LanFreeUpdateException(_strings().updateNotAPackage);
     }
   }
 
@@ -340,11 +348,15 @@ class UpdateInfo {
 /// The constants are `PackageInstaller.STATUS_*`; they are duplicated here
 /// because the app has no dependency on the Android SDK.
 class InstallResult {
-  const InstallResult(this.status, this.message);
+  const InstallResult(this.status, this.message, {this.strings});
 
   /// -1 waiting for the user, 0 success, 1..7 failures.
   final int status;
   final String? message;
+
+  /// Localized text lookup. Null (a bare `InstallResult(status, message)`)
+  /// means English, which is the app's default.
+  final AppLocalizations Function()? strings;
 
   bool get succeeded => status == 0;
 
@@ -356,20 +368,29 @@ class InstallResult {
   bool get blocked => status == 2;
 
   /// Enough to tell the user what to do next.
-  String get explanation => switch (status) {
-    -1 => '等待你在系统界面上确认安装',
-    0 => '安装完成',
-    1 => '安装失败：${message ?? '系统没有给出原因'}',
-    2 => '系统阻止了安装，通常是「安装未知应用」没有允许',
-    3 =>
-      '安装被系统取消了：系统的安装确认界面没有完成'
-          '${message == null ? '' : '（$message）'}',
-    4 => '安装包无效（下载可能不完整），请重试',
-    5 => '已安装的版本与安装包冲突：签名不同，需要先卸载旧版本',
-    6 => '设备存储空间不足，请先清理空间',
-    7 => '安装包与这台设备不兼容',
-    _ => '安装失败（$status）：${message ?? '未知原因'}',
-  };
+  String get explanation {
+    final l = (strings ?? _fallbackStrings)();
+    return switch (status) {
+      -1 => l.updateWaitingForConfirmation,
+      0 => l.updateInstalled,
+      1 =>
+        message == null
+            ? l.updateFailedNoMessage
+            : l.updateFailedWithMessage(message!),
+      2 => l.updateBlockedByPolicy,
+      3 => message == null ? l.updateAborted : '${l.updateAborted}（$message）',
+      4 => l.updateInvalidPackage,
+      5 => l.updateSignatureConflict,
+      6 => l.updateNoSpace,
+      7 => l.updateIncompatible,
+      _ =>
+        message == null
+            ? l.updateFailedWithStatusNoMessage(status)
+            : l.updateFailedWithStatus(status, message!),
+    };
+  }
+
+  static AppLocalizations _fallbackStrings() => stringsFor(null);
 }
 
 /// Raised when a downloaded file fails its integrity check.

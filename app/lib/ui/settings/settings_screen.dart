@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/generated/app_localizations.dart';
+import '../../l10n/l10n.dart';
+import '../../state/locale_controller.dart';
 import '../../state/update_controller.dart';
 import '../../data/update_service.dart';
 import 'cache_screen.dart';
@@ -21,6 +24,27 @@ class SettingsScreen extends ConsumerWidget {
 
   static const repoUrl = 'https://github.com/trdthg/khinsiderTV';
 
+  /// English first: it is the default, and the two are only ever a tap apart.
+  List<Widget> _languageRows(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
+    final current = ref.watch(localeControllerProvider) ?? defaultLanguage;
+    return [
+      for (final (locale, label) in [
+        (const Locale('en'), l.languageEnglish),
+        (const Locale('zh'), l.languageChinese),
+      ])
+        SettingsRow(
+          icon: Icons.translate,
+          title: label,
+          trailing: current.languageCode == locale.languageCode
+              ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+              : null,
+          onSelect: () =>
+              ref.read(localeControllerProvider.notifier).set(locale),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final update = ref.watch(updateControllerProvider);
@@ -31,23 +55,28 @@ class SettingsScreen extends ConsumerWidget {
 
     final info = update.available;
     final asset = info == null ? null : service.assetForPlatform(info.assets);
+    final l = l10n(context);
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            const SettingsHeader(title: '设置'),
+            SettingsHeader(title: l.settingsTitle),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 28),
                 children: [
                   SettingsSection(
-                    title: '更新',
+                    title: AppLocalizations.of(context).settingsLanguage,
+                    children: _languageRows(context, ref),
+                  ),
+                  SettingsSection(
+                    title: l.settingsUpdate,
                     children: [
                       SettingsRow(
                         icon: Icons.system_update_alt,
-                        title: '检查更新',
-                        subtitle: _checkSubtitle(update, info),
+                        title: l.settingsCheckUpdate,
+                        subtitle: _checkSubtitle(l, update, info),
                         trailing: update.checking
                             ? const SizedBox(
                                 width: 18,
@@ -62,7 +91,7 @@ class SettingsScreen extends ConsumerWidget {
                       if (info != null) ...[
                         SettingsRow(
                           icon: Icons.new_releases_outlined,
-                          title: '新版本 v${info.version}',
+                          title: l.settingsNewVersion(info.version),
                           subtitle: info.notes.trim().isEmpty
                               ? null
                               : info.notes.trim().split('\n').first,
@@ -70,7 +99,7 @@ class SettingsScreen extends ConsumerWidget {
                         ..._downloadRows(context, update, notifier, asset),
                         SettingsRow(
                           icon: Icons.open_in_new,
-                          title: '打开发布页',
+                          title: l.settingsOpenReleasePage,
                           subtitle: info.url,
                           onSelect: () => launchUrl(
                             Uri.parse(info.url),
@@ -81,12 +110,12 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                   SettingsSection(
-                    title: '存储',
+                    title: l.settingsStorage,
                     children: [
                       SettingsRow(
                         icon: Icons.sd_storage_outlined,
-                        title: '缓存',
-                        subtitle: '查看占用、清除全部缓存、删除单张专辑',
+                        title: l.settingsCache,
+                        subtitle: l.settingsCacheSubtitle,
                         onSelect: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => const CacheScreen(),
@@ -96,12 +125,12 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                   SettingsSection(
-                    title: '局域网',
+                    title: l.settingsLan,
                     children: [
                       SettingsRow(
                         icon: Icons.devices_other,
-                        title: '跨设备同步',
-                        subtitle: '同一 WiFi 下的设备之间同步收藏、一起播放',
+                        title: l.settingsLanSubtitle,
+                        subtitle: l.settingsLanSubtitleLong,
                         onSelect: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => const LanScreen(),
@@ -111,16 +140,16 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                   SettingsSection(
-                    title: '关于',
+                    title: l.settingsAbout,
                     children: [
                       SettingsRow(
                         icon: Icons.info_outline,
                         title: 'KHInsider',
-                        subtitle: '版本 v$version',
+                        subtitle: l.settingsVersion(version),
                       ),
                       SettingsRow(
                         icon: Icons.code,
-                        title: 'GitHub 仓库',
+                        title: l.settingsGitHubRepo,
                         subtitle: 'github.com/trdthg/khinsiderTV',
                         onSelect: () => launchUrl(
                           Uri.parse(repoUrl),
@@ -138,12 +167,16 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  String _checkSubtitle(UpdateState update, UpdateInfo? info) {
-    if (update.checking) return '正在检查…';
+  String _checkSubtitle(
+    AppLocalizations l,
+    UpdateState update,
+    UpdateInfo? info,
+  ) {
+    if (update.checking) return l.settingsChecking;
     if (update.checkError != null) return update.checkError!;
-    if (info != null) return '发现新版本 v${info.version}';
-    if (update.hasChecked) return '已是最新版本';
-    return '从 GitHub Releases 获取最新版本';
+    if (info != null) return l.settingsUpdateFound(info.version);
+    if (update.hasChecked) return l.settingsUpToDate;
+    return l.settingsFromReleases;
   }
 
   /// Size of the downloaded installer, for the row that says it is ready.
@@ -166,15 +199,18 @@ class SettingsScreen extends ConsumerWidget {
     UpdateAsset? asset,
   ) {
     final phase = update.downloadPhase;
+    final l = l10n(context);
     switch (phase) {
       case UpdateDownloadPhase.downloading:
         return [
           SettingsRow(
             icon: Icons.downloading,
-            title: '下载中 ${(update.downloadProgress * 100).toStringAsFixed(0)}%',
+            title: l.settingsDownloading(
+              (update.downloadProgress * 100).toStringAsFixed(0),
+            ),
             subtitle: [
               if (asset != null) asset.name,
-              '下载完成后会自动打开安装界面',
+              l.settingsWillOpenInstaller,
             ].join(' · '),
             trailing: SizedBox(
               width: 72,
@@ -188,11 +224,11 @@ class SettingsScreen extends ConsumerWidget {
         ];
       case UpdateDownloadPhase.extracting:
         return [
-          const SettingsRow(
+          SettingsRow(
             icon: Icons.inventory_2_outlined,
-            title: '正在解压…',
-            subtitle: '完成后即可重启更新',
-            trailing: SizedBox(
+            title: l.settingsExtracting,
+            subtitle: l.settingsReadyToRestart,
+            trailing: const SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
@@ -203,8 +239,8 @@ class SettingsScreen extends ConsumerWidget {
         return [
           SettingsRow(
             icon: Icons.restart_alt,
-            title: '重启并更新',
-            subtitle: '新版本已下载完成，重启后生效',
+            title: l.settingsRestartAndUpdate,
+            subtitle: l.settingsReadySubtitle,
             onSelect: notifier.restartAndUpdate,
           ),
         ];
@@ -213,10 +249,14 @@ class SettingsScreen extends ConsumerWidget {
         return [
           SettingsRow(
             icon: Icons.install_mobile_outlined,
-            title: update.installError == null ? '安装' : '重试安装',
+            title: update.installError == null
+                ? l.settingsInstall
+                : l.settingsRetryInstall,
             subtitle:
                 update.installError ??
-                '安装包已下载${size == null ? '' : '（$size）'}，点这里打开系统安装界面',
+                (size == null
+                    ? l.settingsDownloaded
+                    : l.settingsDownloadedWithSize(size)),
             danger: update.installError != null,
             onSelect: notifier.revealDownload,
           ),
@@ -227,8 +267,8 @@ class SettingsScreen extends ConsumerWidget {
           if (update.installFailed) ...[
             SettingsRow(
               icon: Icons.open_in_new,
-              title: '改用系统安装器',
-              subtitle: '换一种方式把安装包交给系统（安装会话一直失败时用它）',
+              title: l.settingsUseSystemInstaller,
+              subtitle: l.settingsUseSystemInstallerSubtitle,
               onSelect: () => notifier.installDownloaded(forceIntent: true),
             ),
           ],
@@ -238,8 +278,8 @@ class SettingsScreen extends ConsumerWidget {
           if (update.installNeedsPermission)
             SettingsRow(
               icon: Icons.settings_applications_outlined,
-              title: '去允许安装未知应用',
-              subtitle: '允许之后回到这里，再点一次「重试安装」',
+              title: l.settingsAllowUnknownSources,
+              subtitle: l.settingsAllowUnknownSourcesSubtitle,
               onSelect: notifier.openInstallSettings,
             ),
         ];
@@ -247,34 +287,34 @@ class SettingsScreen extends ConsumerWidget {
         return [
           SettingsRow(
             icon: Icons.error_outline,
-            title: '下载失败',
-            subtitle: update.errorMessage ?? '请重试',
+            title: l.settingsDownloadFailed,
+            subtitle: update.errorMessage ?? l.settingsPleaseRetry,
             danger: true,
           ),
           SettingsRow(
             icon: Icons.refresh,
-            title: '重试',
+            title: l.settingsRetry,
             onSelect: notifier.retryDownload,
           ),
         ];
       case UpdateDownloadPhase.idle:
         if (asset == null) {
-          return const [
+          return [
             SettingsRow(
               icon: Icons.open_in_new,
-              title: '此平台请从发布页下载',
-              subtitle: '没有适用于当前平台的自动更新包',
+              title: l.settingsUseReleasePage,
+              subtitle: l.settingsNoAutoUpdate,
             ),
           ];
         }
         return [
           SettingsRow(
             icon: Icons.download_outlined,
-            title: '下载并安装',
+            title: l.settingsDownloadAndInstall,
             subtitle: [
               asset.name,
-              if (Platform.isAndroid) '通用安装包',
-              '下载完成后直接安装，不再询问',
+              if (Platform.isAndroid) l.settingsUniversalPackage,
+              l.settingsAutoInstallNote,
             ].join(' · '),
             onSelect: update.checking ? null : notifier.download,
           ),

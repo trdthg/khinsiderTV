@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/theme.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 
 /// Touch screens and D-Pads want different feedback from a tile.
 ///
@@ -44,6 +45,9 @@ void main() {
   }) {
     return tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         theme: theme ?? AppTheme.dark(),
         home: Scaffold(
           body: Center(
@@ -132,6 +136,9 @@ void main() {
     final boundaryKey = GlobalKey();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         theme: theme,
         home: Scaffold(
           body: Center(
@@ -182,6 +189,9 @@ void main() {
     var tile = 0;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         theme: AppTheme.dark(),
         home: Scaffold(
           body: Center(
@@ -224,7 +234,12 @@ void main() {
     // Navigating away while the ripple is still running must not leave the
     // ripple's tickers running on the disposed Material.
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SizedBox())),
+      const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
+        home: Scaffold(body: SizedBox()),
+      ),
     );
     await tester.pump();
 

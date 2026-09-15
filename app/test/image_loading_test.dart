@@ -9,6 +9,7 @@ import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/data/preferences_store.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
@@ -163,7 +164,12 @@ void main() {
         overrides: [
           kh.searchControllerProvider.overrideWith(_SeededSearch.new),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();
@@ -181,7 +187,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [favoritesProvider.overrideWith(_SeededFavorites.new)],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();
@@ -212,7 +223,12 @@ void main() {
               0,
             )).overrideWith((ref) async => _album()),
           ],
-          child: const MaterialApp(home: AlbumScreen(albumId: 'demo-album')),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: Locale('en'),
+            home: AlbumScreen(albumId: 'demo-album'),
+          ),
         ),
       );
       for (var i = 0; i < 5; i++) {

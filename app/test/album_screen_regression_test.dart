@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/ui/album/album_screen.dart';
@@ -44,6 +45,9 @@ void main() {
           )).overrideWith((ref) async => longTitleAlbum()),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           // The album screen is pushed ON TOP of the home screen, so there is
           // a route to pop (maybePop on the root route is a no-op).
           home: const SearchScreen(),
@@ -102,6 +106,9 @@ void main() {
           ).overrideWith((ref) async => albumWith(12)),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: AlbumScreen(albumId: 'long-title-album'),
         ),
       ),
@@ -126,6 +133,9 @@ void main() {
           ).overrideWith((ref) async => albumWith(3)),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: AlbumScreen(albumId: 'long-title-album'),
         ),
       ),

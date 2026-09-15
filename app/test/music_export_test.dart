@@ -7,6 +7,7 @@ import 'package:khinsider/audio/android_storage.dart';
 import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/audio/music_export.dart';
 import 'package:khinsider/core/platform/device.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
@@ -256,7 +257,12 @@ void main() {
               0,
             )).overrideWith((ref) async => target),
           ],
-          child: MaterialApp(home: AlbumScreen(albumId: target.summary.id)),
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: Locale('en'),
+            home: AlbumScreen(albumId: target.summary.id),
+          ),
         ),
       );
       for (var i = 0; i < 6; i++) {

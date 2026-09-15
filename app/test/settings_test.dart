@@ -9,6 +9,7 @@ import 'package:khinsider/core/platform/device.dart';
 import 'package:khinsider/data/image_cache.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/data/update_service.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
 import 'package:khinsider/state/update_controller.dart';
 import 'package:khinsider/ui/settings/cache_screen.dart';
@@ -103,7 +104,12 @@ void main() {
           if (pageCache != null) httpCacheProvider.overrideWithValue(pageCache),
           if (images != null) imageCacheProvider.overrideWithValue(images),
         ],
-        child: MaterialApp(home: home),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: home,
+        ),
       ),
     );
     await tester.pump();
@@ -124,9 +130,17 @@ void main() {
         ),
       );
 
-      expect(find.text('新版本 v9.9.9'), findsOneWidget);
+      // Two different sentences: the row that offers the version and the
+      // check row's subtitle (新版本 vs 发现新版本) must not collapse into one
+      // in English, or the screen reads as a stutter.
+      expect(find.text('New version 9.9.9'), findsOneWidget);
+      expect(
+        find.text('Version 9.9.9 is available'),
+        findsOneWidget,
+        reason: 'the available version is offered',
+      );
       expect(find.text('Fixes things'), findsOneWidget);
-      await tester.tap(find.text('下载并安装'));
+      await tester.tap(find.text('Download and install'));
       await tester.pump();
 
       expect(fake.downloads, 1, reason: 'no confirmation, no popup');
@@ -138,17 +152,20 @@ void main() {
     ) async {
       await pump(tester, state: const UpdateState(hasChecked: true));
 
-      expect(find.text('已是最新版本'), findsOneWidget);
+      expect(find.text('Up to date'), findsOneWidget);
     });
 
     testWidgets('shows a failed check and can retry it', (tester) async {
       final fake = await pump(
         tester,
-        state: const UpdateState(hasChecked: true, checkError: '检查更新失败：网络不可用'),
+        state: const UpdateState(
+          hasChecked: true,
+          checkError: 'Could not check for updates: 网络不可用',
+        ),
       );
 
-      expect(find.text('检查更新失败：网络不可用'), findsOneWidget);
-      await tester.tap(find.text('检查更新'));
+      expect(find.text('Could not check for updates: 网络不可用'), findsOneWidget);
+      await tester.tap(find.text('Check for updates'));
       await tester.pump();
 
       expect(fake.checks, 1);
@@ -187,19 +204,24 @@ void main() {
           ),
           downloadPhase: UpdateDownloadPhase.downloaded,
           downloadedFile: '/tmp/khinsider-9.9.9-universal.apk',
-          installError: '系统还没有允许本应用安装应用，请先打开这个开关',
+          installError:
+              'Android has not allowed this app to install apps yet. '
+              'Turn that on first.',
           installNeedsPermission: true,
         ),
       );
 
-      expect(find.text('重试安装'), findsOneWidget);
-      expect(find.textContaining('系统还没有允许'), findsOneWidget);
-      await tester.tap(find.text('重试安装'));
+      expect(find.text('Retry install'), findsOneWidget);
+      expect(
+        find.textContaining('has not allowed this app to install apps'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Retry install'));
       await tester.pump();
       expect(fake.installs, 1);
       expect(fake.downloads, 0, reason: 'the APK is already on disk');
 
-      await tester.tap(find.text('去允许安装未知应用'));
+      await tester.tap(find.text('Allow installing unknown apps'));
       await tester.pump();
       expect(fake.installSettingsOpened, 1);
     });
@@ -219,8 +241,8 @@ void main() {
         ),
       );
 
-      expect(find.text('重启并更新'), findsOneWidget);
-      await tester.tap(find.text('重启并更新'));
+      expect(find.text('Restart and update'), findsOneWidget);
+      await tester.tap(find.text('Restart and update'));
       await tester.pump();
 
       expect(fake.restarts, 1);
@@ -264,14 +286,14 @@ void main() {
       expect(find.textContaining('4 KB'), findsOneWidget);
       expect(find.textContaining('8 KB'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('删除《Album One》的缓存'));
+      await tester.tap(find.byTooltip('Delete the cache for Album One'));
       await tester.pump();
       await tester.pump();
 
       expect(cache.deleted, ['/cache/Album One']);
       expect(find.text('Album One'), findsNothing);
       expect(find.text('Album Two'), findsOneWidget);
-      expect(find.textContaining('已删除'), findsOneWidget);
+      expect(find.textContaining('Deleted Album One'), findsOneWidget);
     });
 
     testWidgets('clears everything in one tap', (tester) async {
@@ -295,13 +317,13 @@ void main() {
         size: const Size(460, 2600),
       );
 
-      await tester.tap(find.text('清除全部缓存'));
+      await tester.tap(find.text('Clear all caches'));
       await tester.pump();
       await tester.pump();
 
       expect(cache.cleared, 1);
-      expect(find.text('还没有缓存任何专辑'), findsWidgets);
-      expect(find.textContaining('已清除 4 KB'), findsOneWidget);
+      expect(find.text('No albums cached yet'), findsWidgets);
+      expect(find.textContaining('Cleared 4 KB'), findsOneWidget);
     });
   });
 }

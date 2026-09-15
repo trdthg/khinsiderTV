@@ -6,6 +6,7 @@ import 'package:khinsider_api/khinsider_api.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../core/widgets/seek_bar.dart';
+import '../../l10n/l10n.dart';
 import '../../state/player_controller.dart';
 import '../../state/theme_controller.dart';
 
@@ -30,6 +31,7 @@ class OsdMenu extends ConsumerWidget {
     final notifier = ref.read(playerControllerProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
     final entry = player.current;
+    final l = l10n(context);
 
     return Positioned.fill(
       child: ColoredBox(
@@ -103,7 +105,7 @@ class OsdMenu extends ConsumerWidget {
                         children: [
                           _MenuButton(
                             icon: Icons.skip_previous,
-                            label: 'Previous',
+                            label: l.actionPrevious,
                             onPressed: notifier.previous,
                           ),
                           const SizedBox(width: 12),
@@ -111,7 +113,9 @@ class OsdMenu extends ConsumerWidget {
                             icon: player.playing
                                 ? Icons.pause
                                 : Icons.play_arrow,
-                            label: player.playing ? 'Pause' : 'Play',
+                            label: player.playing
+                                ? l.actionPause
+                                : l.actionPlay,
                             filled: true,
                             focusNode: playFocusNode,
                             onPressed: notifier.togglePlayPause,
@@ -119,7 +123,7 @@ class OsdMenu extends ConsumerWidget {
                           const SizedBox(width: 12),
                           _MenuButton(
                             icon: Icons.skip_next,
-                            label: 'Next',
+                            label: l.actionNext,
                             onPressed: notifier.next,
                           ),
                         ],
@@ -128,7 +132,7 @@ class OsdMenu extends ConsumerWidget {
                       // Audio quality.
                       _MenuRow(
                         icon: Icons.high_quality,
-                        label: 'Audio quality',
+                        label: l.osdAudioQuality,
                         child: Row(
                           children: [
                             _QualityChip(
@@ -158,7 +162,7 @@ class OsdMenu extends ConsumerWidget {
                       // Theme.
                       _MenuRow(
                         icon: Icons.palette_outlined,
-                        label: 'Theme',
+                        label: l.osdTheme,
                         child: Row(
                           children: [
                             for (var i = 0; i < AppTheme.seeds.length; i++)
@@ -307,11 +311,12 @@ class _ThemeSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = l10n(context);
     return DpadTile(
       borderRadius: 20,
       onSelect: onTap,
       child: Semantics(
-        label: 'Theme $tooltip',
+        label: l.osdThemeWithTooltip(tooltip),
         button: true,
         child: Tooltip(
           message: tooltip,

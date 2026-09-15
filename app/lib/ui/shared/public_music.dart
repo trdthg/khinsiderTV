@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/preferences_store.dart';
+import '../../l10n/l10n.dart';
 import '../../state/track_cache_controller.dart';
 
 /// Explains why the cache can only move into the system `Music/` folder after
@@ -16,27 +17,21 @@ import '../../state/track_cache_controller.dart';
 Future<bool> offerPublicMusicFolder(BuildContext context, WidgetRef ref) async {
   final cache = ref.read(audioCacheManagerProvider);
   if (!cache.supportsPublicMusicFolder) return false;
+  final l = l10n(context);
 
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Save songs in the system Music folder?'),
-      content: const Text(
-        'Android only lets an app write into Music/ once you grant it "all '
-        'files access" — the next screen has that switch for KHInsider.\n\n'
-        'Downloads then land in Music/KHInsider, where your file manager, '
-        'other players and your computer can see them. Tracks that are '
-        'already downloaded stay in the app folder until you delete or move '
-        'them.',
-      ),
+      title: Text(l.musicFolderQuestion),
+      content: Text(l.musicFolderBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Not now'),
+          child: Text(l.musicNotNow),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Open settings'),
+          child: Text(l.musicOpenSettings),
         ),
       ],
     ),
@@ -48,14 +43,9 @@ Future<bool> offerPublicMusicFolder(BuildContext context, WidgetRef ref) async {
   cache.forgetRoot();
   await cache.requestPublicMusicAccess();
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Turn on "all files access", then come back: new downloads go to '
-          'Music/KHInsider.',
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l.musicFolderDenied)));
   }
   return true;
 }

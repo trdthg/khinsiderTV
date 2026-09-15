@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/widgets/dpad_tile.dart';
+import '../../l10n/l10n.dart';
 
 /// A titled group of [SettingsRow]s, drawn as one rounded card.
 class SettingsSection extends StatelessWidget {
@@ -171,13 +172,14 @@ class SettingsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = l10n(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 0),
       child: Row(
         children: [
           DpadIconButton(
             icon: Icons.arrow_back,
-            tooltip: '返回',
+            tooltip: l.actionBack,
             onPressed: () => Navigator.of(context).maybePop(),
           ),
           const SizedBox(width: 8),

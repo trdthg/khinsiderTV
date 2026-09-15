@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import '../../audio/music_export.dart';
+import '../../l10n/l10n.dart';
 import '../../state/track_cache_controller.dart';
 
 /// Copies an album's cached tracks into the system `Music/` folder and shows
@@ -58,10 +59,11 @@ class _ExportAlbumScreenState extends ConsumerState<ExportAlbumScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = l10n(context);
     final report = _report;
     final total = _total;
     return Scaffold(
-      appBar: AppBar(title: const Text('Export to Music')),
+      appBar: AppBar(title: Text(l.albumExport)),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -73,8 +75,7 @@ class _ExportAlbumScreenState extends ConsumerState<ExportAlbumScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Copying the downloaded tracks into Music/KHInsider. '
-              'No permission needed.',
+              l.exportCopyingExplain,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
@@ -83,8 +84,8 @@ class _ExportAlbumScreenState extends ConsumerState<ExportAlbumScreen> {
               const SizedBox(height: 12),
               Text(
                 total == 0
-                    ? 'Looking for cached tracks…'
-                    : '$_done / $total tracks',
+                    ? l.exportLookingForCached
+                    : l.exportProgress(_done, total),
               ),
             ] else ...[
               Text(
@@ -97,7 +98,7 @@ class _ExportAlbumScreenState extends ConsumerState<ExportAlbumScreen> {
                 child: FilledButton(
                   autofocus: true,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Done'),
+                  child: Text(l.actionDone),
                 ),
               ),
             ],

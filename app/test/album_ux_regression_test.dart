@@ -11,6 +11,7 @@ import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/core/keyboard/global_media_keys.dart';
 import 'package:khinsider/data/khinsider_client.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
@@ -130,6 +131,9 @@ Future<ProviderContainer> pumpAlbum(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         navigatorKey: navigatorKey,
         builder: (context, child) => GlobalMediaKeys(
           navigatorKey: navigatorKey,
@@ -475,6 +479,9 @@ void main() {
     Future<Offset> cardPosition(double exitT) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: Scaffold(
             body: SizedBox(
               width: 600,
@@ -504,6 +511,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         home: Scaffold(
           body: SizedBox(
             width: 600,
@@ -612,6 +622,9 @@ void main() {
     Future<Offset> position(String title, double exitT) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: Scaffold(
             body: SizedBox(
               width: 800,

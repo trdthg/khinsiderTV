@@ -8,6 +8,7 @@ import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../core/widgets/dpad_nav.dart';
 import '../../data/preferences_store.dart';
+import '../../l10n/l10n.dart';
 import '../../state/search_controller.dart';
 import '../../state/update_controller.dart';
 import '../settings/settings_screen.dart';
@@ -130,6 +131,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(searchControllerProvider);
     final narrow = _narrow;
+    final l = l10n(context);
     // The TV field is the platform's own EditText (see TvSystemTextField): that
     // is the only way the platform keyboard gets the remote's D-pad.
     final systemField = _tv;
@@ -171,7 +173,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       child: TvSystemTextField(
                         key: _systemFieldKey,
                         controller: _controller,
-                        hintText: 'Search game soundtracks…',
+                        hintText: l.searchHint,
                         onSubmitted: _submit,
                         onMoveDown: () =>
                             _leaveSystemField(TraversalDirection.down),
@@ -189,16 +191,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     controller: _controller,
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _submit(),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Search game soundtracks…',
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: l.searchHint,
                     ),
                   ),
           ),
           const SizedBox(width: 8),
           DpadIconButton(
             focusNode: _searchButtonFocus,
-            tooltip: 'Search',
+            tooltip: l.actionSearch,
             filled: true,
             icon: Icons.arrow_forward,
             onPressed: _submit,
@@ -250,6 +252,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     bool reverse = false,
     bool hideHistory = false,
   }) {
+    final l = l10n(context);
     if (state.loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -260,7 +263,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return _IdleHome(showHistory: !hideHistory);
     }
     if (state.results.isEmpty) {
-      return const _Message(icon: Icons.search_off, text: 'No albums found.');
+      return _Message(icon: Icons.search_off, text: l.searchNoResults);
     }
     return _AlbumGrid(albums: state.results, reverse: reverse);
   }
@@ -276,6 +279,7 @@ class _RecentSearchesStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(searchHistoryProvider).value ?? const [];
     if (history.isEmpty) return const SizedBox.shrink();
+    final l = l10n(context);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 4, 2),
@@ -312,7 +316,7 @@ class _RecentSearchesStrip extends ConsumerWidget {
             ),
           ),
           DpadIconButton(
-            tooltip: 'Clear history',
+            tooltip: l.searchClearHistory,
             iconSize: 20,
             icon: Icons.delete_outline,
             onPressed: () => ref.read(searchHistoryProvider.notifier).clear(),
@@ -335,6 +339,7 @@ class _IdleHome extends ConsumerWidget {
     final history = ref.watch(searchHistoryProvider).value ?? const [];
     final favorites = ref.watch(favoritesProvider).value ?? const [];
     final recents = ref.watch(recentAlbumsProvider).value ?? const [];
+    final l = l10n(context);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -345,12 +350,12 @@ class _IdleHome extends ConsumerWidget {
               const Icon(Icons.history, size: 18),
               const SizedBox(width: 6),
               Text(
-                'Recent searches',
+                l.searchRecentSearches,
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const Spacer(),
               DpadIconButton(
-                tooltip: 'Clear history',
+                tooltip: l.searchClearHistory,
                 iconSize: 20,
                 icon: Icons.delete_outline,
                 onPressed: () =>
@@ -378,25 +383,20 @@ class _IdleHome extends ConsumerWidget {
         ],
         if (favorites.isNotEmpty)
           _AlbumRow(
-            title: 'Favorites',
+            title: l.searchFavorites,
             icon: Icons.favorite,
             albums: favorites,
           ),
         if (recents.isNotEmpty)
           _AlbumRow(
-            title: 'Recently viewed',
+            title: l.searchRecentlyViewed,
             icon: Icons.history,
             albums: recents,
           ),
         if ((!showHistory || history.isEmpty) &&
             favorites.isEmpty &&
             recents.isEmpty)
-          const _Message(
-            icon: Icons.music_note,
-            text:
-                'Search KHInsider for game soundtracks.\n'
-                'Tip: navigate with the D-Pad / gamepad.',
-          ),
+          _Message(icon: Icons.music_note, text: l.searchIdleTip),
       ],
     );
   }
@@ -634,12 +634,13 @@ class _SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l = l10n(context);
     return DpadTile(
       focusNode: focusNode,
       borderRadius: 24,
       onSelect: onPressed,
       child: Tooltip(
-        message: hasUpdate ? '设置（有可用更新）' : '设置',
+        message: hasUpdate ? l.searchSettingsWithUpdate : l.searchSettings,
         child: SizedBox(
           width: 44,
           height: 44,

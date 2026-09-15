@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/audio/audio_cache_manager.dart';
 import 'package:khinsider/data/preferences_store.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
@@ -106,7 +107,12 @@ void main() {
             0,
           )).overrideWith((ref) async => mobileAlbum()),
         ],
-        child: const MaterialApp(home: AlbumScreen(albumId: 'mobile-album')),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: AlbumScreen(albumId: 'mobile-album'),
+        ),
       ),
     );
     for (var i = 0; i < 6; i++) {
@@ -180,7 +186,12 @@ void main() {
         overrides: [
           kh.searchControllerProvider.overrideWith(SeededSearchController.new),
         ],
-        child: const MaterialApp(home: SearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: SearchScreen(),
+        ),
       ),
     );
     await tester.pump();

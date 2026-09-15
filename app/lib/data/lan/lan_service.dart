@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import '../../l10n/generated/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import 'lan_device.dart';
 
 /// Thrown when a peer cannot be reached or answers with something unexpected.
@@ -68,19 +70,20 @@ class LanPeerDiagnosis {
 
   bool get ok => udp && tcp;
 
-  String describe(String name) {
+  String describe(String name, [AppLocalizations? strings]) {
+    final l = strings ?? stringsFor(null);
     final at = port == null
         ? ''
-        : '（端口 $port${version.isEmpty ? '' : '，v$version'}）';
+        : version.isEmpty
+        ? l.lanDiagAt(port!)
+        : l.lanDiagAtVersion(port!, version);
     if (!udp) {
-      return '$name 的地址探测没有回应$at：对方可能已经退出、不在同一个网络里，'
-          '或者路由器把 UDP 也挡了。';
+      return l.lanDiagNoAnswer(name, at);
     }
     if (!tcp) {
-      return '$name 的地址探测有回应$at，但连不上它的 API：对方的防火墙、'
-          '路由器的客户端隔离挡住了 TCP，或者对方的应用刚被系统挂起。';
+      return l.lanDiagTcpBlocked(name, at);
     }
-    return '$name 一切正常$at，收藏 $favorites 张。';
+    return l.lanDiagOk(name, at, favorites);
   }
 }
 
@@ -109,11 +112,16 @@ class LanService {
     required this.replaceFavorites,
     this.onRemoteSync,
     this.discoveryPort = defaultDiscoveryPort,
-  });
+    AppLocalizations Function()? strings,
+  }) : _strings = strings ?? (() => stringsFor(null));
 
   final String deviceId;
   final String deviceName;
   final String appVersion;
+
+  /// The strings for the language in effect right now. A function rather than a
+  /// value so a language change is picked up without rebuilding the service.
+  final AppLocalizations Function() _strings;
 
   /// Local favorites as JSON (see `albumSummaryToJson`).
   final Future<List<JsonMap>> Function() readFavorites;
@@ -193,7 +201,7 @@ class LanService {
       // A device with no network, or a blocked port: the feature is simply
       // unavailable there, which must not take the app down.
       await stop();
-      throw LanException('无法启动局域网服务：$e');
+      throw LanException(_strings().lanStartFailed('$e'));
     }
     _sweeper = Timer.periodic(const Duration(seconds: 5), (_) => _sweep());
     await refresh();
@@ -280,10 +288,10 @@ class LanService {
   /// broadcasts. Throws when nothing answers.
   Future<LanDevice> addManual(String host) async {
     final address = host.trim();
-    if (address.isEmpty) throw const LanException('请输入地址');
+    if (address.isEmpty) throw LanException(_strings().lanEnterAddress);
     final found = await _probeHost(address);
     if (found == null) {
-      throw LanException('$address 上没有回应');
+      throw LanException(_strings().lanNoAnswerFrom(address));
     }
     _manualHosts.add(address);
     _devices[found.id] = found.copyWith(lastSeen: DateTime.now());
@@ -339,7 +347,7 @@ class LanService {
   }) async {
     final body = await _request(peer, 'GET', '/kh/favorites');
     final raw = body['favorites'];
-    if (raw is! List) throw const LanException('对方返回的数据无法识别');
+    if (raw is! List) throw LanException(_strings().lanUnreadableResponse);
     final incoming = raw.whereType<Map>().map(JsonMap.from).toList();
     final outcome = replace
         ? await replaceFavorites(incoming)
@@ -591,7 +599,9 @@ class LanService {
             ? await replaceFavorites(incoming)
             : await mergeFavorites(incoming);
         final result = LanSyncResult(
-          peer: request.headers.value('x-khinsider-name') ?? '另一台设备',
+          peer:
+              request.headers.value('x-khinsider-name') ??
+              _strings().lanAnotherDevice,
           added: outcome.added,
           total: outcome.total,
           incoming: true,
@@ -651,13 +661,10 @@ class LanService {
         ? '${error.osError?.message ?? ''} ${error.message}'.toLowerCase()
         : '$error'.toLowerCase();
     if (text.contains('refused')) {
-      return '\n对方的端口拒绝连接：那个端口上没有服务在听（应用每次启动都会重新'
-          '分配端口，对方可能刚重启过）。';
+      return '\n${_strings().lanRefusedHint}';
     }
     if (text.contains('timed out') || text.contains('timeout')) {
-      return '\n对方没有回应 TCP：对方的应用可能已经不在前台（被系统挂起），'
-          '也可能是防火墙或路由器的"客户端隔离"（AP 隔离）—— UDP 能通、TCP 不通'
-          '正是这两种情况的特征。请在两边都打开这个页面再试。';
+      return '\n${_strings().lanTimeoutHint}';
     }
     return '';
   }
@@ -676,8 +683,7 @@ class LanService {
       final resolved = await _probeHost(peer.host);
       if (resolved == null) {
         throw LanException(
-          '连不上 ${peer.name}（${peer.host}）：它的地址还没有确认，'
-          '地址探测也没有回应。请让对方的应用保持运行，并确认两台设备在同一个网络里。',
+          _strings().lanUnreachableNoPort(peer.name, peer.host),
         );
       }
       peer = _devices[peer.id] ?? resolved;
@@ -691,8 +697,7 @@ class LanService {
       final fresh = await _refreshPeer(peer);
       if (fresh == null) {
         throw LanException(
-          '连不上 ${peer.name}（${peer.host}:${peer.port}）：$first\n'
-          '它在广播里能看到，但连它的服务端口没有回应。'
+          '${_strings().lanUnreachableSeen(peer.name, peer.host, peer.port, '$first')}'
           '${_explain(first)}',
         );
       }
@@ -700,7 +705,7 @@ class LanService {
         return await _requestOnce(fresh, method, path, payload: payload);
       } catch (second) {
         throw LanException(
-          '连不上 ${peer.name}（${fresh.host}:${fresh.port}）：$second'
+          '${_strings().lanUnreachableAfterRetry(peer.name, fresh.host, fresh.port, '$second')}'
           '${_explain(second)}',
         );
       }
@@ -731,10 +736,10 @@ class LanService {
           .join()
           .timeout(_requestTimeout);
       if (response.statusCode != HttpStatus.ok) {
-        throw LanException('对方返回 ${response.statusCode}');
+        throw LanException(_strings().lanBadStatus(response.statusCode));
       }
       final decoded = jsonDecode(body);
-      if (decoded is! Map) throw const LanException('对方返回的数据无法识别');
+      if (decoded is! Map) throw LanException(_strings().lanUnreadableResponse);
       return JsonMap.from(decoded);
     } finally {
       client.close(force: true);

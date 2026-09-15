@@ -67,7 +67,7 @@ void main() {
         isA<LanFreeUpdateException>().having(
           (e) => e.message,
           'message',
-          contains('下载不完整'),
+          contains('The download was incomplete'),
         ),
       ),
     );
@@ -96,7 +96,7 @@ void main() {
         isA<LanFreeUpdateException>().having(
           (e) => e.message,
           'message',
-          contains('不是安装包'),
+          contains('is not an installer'),
         ),
       ),
     );
@@ -173,15 +173,15 @@ void main() {
       String explain(int status, [String? message]) =>
           InstallResult(status, message).explanation;
 
-      expect(explain(-1), contains('确认'));
-      expect(explain(0), '安装完成');
+      expect(explain(-1), contains('confirm the install'));
+      expect(explain(0), 'Installed');
       expect(explain(1, 'boom'), contains('boom'));
-      expect(explain(2), contains('安装未知应用'));
-      expect(explain(3), contains('取消'));
-      expect(explain(4), contains('不完整'));
-      expect(explain(5), contains('签名'));
-      expect(explain(6), contains('存储空间'));
-      expect(explain(7), contains('不兼容'));
+      expect(explain(2), contains('install unknown apps'));
+      expect(explain(3), contains('cancelled'));
+      expect(explain(4), contains('not valid'));
+      expect(explain(5), contains('signatures differ'));
+      expect(explain(6), contains('not enough storage'));
+      expect(explain(7), contains('not compatible'));
       expect(explain(99), contains('99'));
       expect(InstallResult(0, null).succeeded, isTrue);
       expect(InstallResult(2, null).blocked, isTrue);

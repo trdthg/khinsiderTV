@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 
+import '../l10n/l10n.dart';
 import 'base_audio_player.dart';
 
 /// The app's [MediaSession] (audio_service): publishes what the player is doing
@@ -91,32 +92,6 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
   static const String _iconSkipPrevious = 'drawable/khinsider_skip_previous';
   static const String _iconSkipNext = 'drawable/khinsider_skip_next';
   static const String _iconStop = 'drawable/khinsider_stop';
-
-  static const MediaControl _controlPlay = MediaControl(
-    androidIcon: _iconPlay,
-    label: 'Play',
-    action: MediaAction.play,
-  );
-  static const MediaControl _controlPause = MediaControl(
-    androidIcon: _iconPause,
-    label: 'Pause',
-    action: MediaAction.pause,
-  );
-  static const MediaControl _controlSkipToPrevious = MediaControl(
-    androidIcon: _iconSkipPrevious,
-    label: 'Previous',
-    action: MediaAction.skipToPrevious,
-  );
-  static const MediaControl _controlSkipToNext = MediaControl(
-    androidIcon: _iconSkipNext,
-    label: 'Next',
-    action: MediaAction.skipToNext,
-  );
-  static const MediaControl _controlStop = MediaControl(
-    androidIcon: _iconStop,
-    label: 'Stop',
-    action: MediaAction.stop,
-  );
 
   @override
   void setSystemCommandHandler(SystemMediaCommandHandler? handler) {
@@ -224,17 +199,37 @@ class KhinsiderAudioHandler extends BaseAudioHandler implements MediaSession {
 
     final snap = _latestSnapshot;
     final playing = snap?.playing ?? false;
+    // The notification's action labels are built from the locale the UI is
+    // showing right now: `main` creates this handler before the widget tree,
+    // so there is no context (and no Riverpod ref) to read from here.
+    final l = stringsFor(currentUiLocale);
     playbackState.add(
       playbackState.value.copyWith(
         controls: [
-          _controlSkipToPrevious,
-          playing ? _controlPause : _controlPlay,
-          _controlSkipToNext,
+          MediaControl(
+            androidIcon: _iconSkipPrevious,
+            label: l.actionPrevious,
+            action: MediaAction.skipToPrevious,
+          ),
+          MediaControl(
+            androidIcon: playing ? _iconPause : _iconPlay,
+            label: playing ? l.actionPause : l.actionPlay,
+            action: playing ? MediaAction.pause : MediaAction.play,
+          ),
+          MediaControl(
+            androidIcon: _iconSkipNext,
+            label: l.actionNext,
+            action: MediaAction.skipToNext,
+          ),
           // Expanded-view only (compact view stays [0,1,2]); it is the way to
           // end the session, since the service stays in the foreground while
           // paused and the notification is therefore not swipe-dismissible on
           // older Android versions.
-          _controlStop,
+          MediaControl(
+            androidIcon: _iconStop,
+            label: l.actionStop,
+            action: MediaAction.stop,
+          ),
         ],
         // Compact-view order of [controls]; being explicit keeps play/pause in
         // the middle slot on every OEM.

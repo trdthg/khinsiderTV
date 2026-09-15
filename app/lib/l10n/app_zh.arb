@@ -1,0 +1,786 @@
+{
+  "@@locale": "zh",
+  "updateIncompleteDownload": "下载不完整（{actual} / {expected}），已删除，请重试",
+  "@updateIncompleteDownload": {
+    "placeholders": {
+      "actual": {
+        "type": "String"
+      },
+      "expected": {
+        "type": "String"
+      }
+    }
+  },
+  "updateEmptyDownload": "下载的文件是空的，请重试",
+  "updateNotAPackage": "下载到的不是安装包（内容损坏），已删除，请重试",
+  "updateWaitingForConfirmation": "等待你在系统界面上确认安装",
+  "updateInstalled": "安装完成",
+  "updateFailedWithMessage": "安装失败：{message}",
+  "@updateFailedWithMessage": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedNoMessage": "安装失败",
+  "updateBlockedByPolicy": "系统阻止了安装，通常是「安装未知应用」没有允许",
+  "updateAborted": "安装被系统取消了：系统的安装确认界面没有完成",
+  "updateInvalidPackage": "安装包无效（下载可能不完整），请重试",
+  "updateSignatureConflict": "已安装的版本与安装包冲突：签名不同，需要先卸载旧版本",
+  "updateNoSpace": "设备存储空间不足，请先清理空间",
+  "updateIncompatible": "安装包与这台设备不兼容",
+  "updateFailedWithStatus": "安装失败（{status}）：{message}",
+  "@updateFailedWithStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedWithStatusNoMessage": "安装失败（{status}）",
+  "@updateFailedWithStatusNoMessage": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "updateCheckFailed": "检查更新失败：{error}",
+  "@updateCheckFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloadFailed": "下载失败：{error}",
+  "@updateDownloadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateExtractFailed": "解压失败：{error}",
+  "@updateExtractFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNeedInstallPermission": "系统还没有允许本应用安装应用，请先打开这个开关",
+  "updateOpenInstallerFailed": "打开安装界面失败：{error}",
+  "@updateOpenInstallerFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateHandedToInstaller": "已交给系统安装器，请在系统界面上确认",
+  "settingsTitle": "设置",
+  "settingsUpdate": "更新",
+  "settingsCheckUpdate": "检查更新",
+  "settingsNewVersion": "新版本 v{version}",
+  "@settingsNewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsOpenReleasePage": "打开发布页",
+  "settingsStorage": "存储",
+  "settingsCache": "缓存",
+  "settingsCacheSubtitle": "查看占用、清除全部缓存、删除单张专辑",
+  "settingsLan": "局域网",
+  "settingsLanSubtitle": "跨设备同步",
+  "settingsLanSubtitleLong": "同一 WiFi 下的设备之间同步收藏、一起播放",
+  "settingsAbout": "关于",
+  "settingsVersion": "版本 v{version}",
+  "@settingsVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsGitHubRepo": "GitHub 仓库",
+  "settingsChecking": "正在检查…",
+  "settingsUpdateFound": "发现新版本 v{version}",
+  "@settingsUpdateFound": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsUpToDate": "已是最新版本",
+  "settingsFromReleases": "从 GitHub Releases 获取最新版本",
+  "settingsDownloading": "下载中 {percent}%",
+  "@settingsDownloading": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsWillOpenInstaller": "下载完成后会自动打开安装界面",
+  "settingsExtracting": "正在解压…",
+  "settingsReadyToRestart": "完成后即可重启更新",
+  "settingsRestartAndUpdate": "重启并更新",
+  "settingsReadySubtitle": "新版本已下载完成，重启后生效",
+  "settingsInstall": "安装",
+  "settingsRetryInstall": "重试安装",
+  "settingsDownloadedWithSize": "安装包已下载（{size}），点这里打开系统安装界面",
+  "@settingsDownloadedWithSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDownloaded": "安装包已下载，点这里打开系统安装界面",
+  "settingsUseSystemInstaller": "改用系统安装器",
+  "settingsUseSystemInstallerSubtitle": "换一种方式把安装包交给系统（安装会话一直失败时用它）",
+  "settingsAllowUnknownSources": "去允许安装未知应用",
+  "settingsAllowUnknownSourcesSubtitle": "允许之后回到这里，再点一次「重试安装」",
+  "settingsDownloadFailed": "下载失败",
+  "settingsPleaseRetry": "请重试",
+  "settingsRetry": "重试",
+  "settingsUseReleasePage": "此平台请从发布页下载",
+  "settingsNoAutoUpdate": "没有适用于当前平台的自动更新包",
+  "settingsDownloadAndInstall": "下载并安装",
+  "settingsUniversalPackage": "通用安装包",
+  "settingsAutoInstallNote": "下载完成后直接安装，不再询问",
+  "settingsLanguage": "语言",
+  "settingsLanguageSubtitle": "界面语言",
+  "languageEnglish": "English",
+  "languageChinese": "简体中文",
+  "cacheClearing": "正在清除…",
+  "cacheCleared": "已清除 {size}",
+  "@cacheCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheNothingToClear": "没有可清除的缓存",
+  "cacheClearFailed": "清除失败：{error}",
+  "@cacheClearFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearingSearch": "正在清除搜索缓存…",
+  "cacheSearchCleared": "已清除搜索缓存 {size}",
+  "@cacheSearchCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheSearchAlreadyEmpty": "搜索缓存本来就是空的",
+  "cacheClearingImages": "正在清除图片缓存…",
+  "cacheImagesCleared": "已清除图片缓存 {size}",
+  "@cacheImagesCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheImagesAlreadyEmpty": "图片缓存本来就是空的",
+  "cacheDeleting": "正在删除《{album}》…",
+  "@cacheDeleting": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheDeleted": "已删除《{album}》({size})",
+  "@cacheDeleted": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheDeleteFailed": "删除失败：{error}",
+  "@cacheDeleteFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheTitle": "缓存",
+  "cacheLocation": "位置",
+  "cachePublicMusic": "公开的 Music 目录：这里的文件同时是导出到 Music 的专辑",
+  "cacheAppPrivate": "应用私有目录",
+  "cacheUsage": "占用",
+  "cacheNoAlbums": "还没有缓存任何专辑",
+  "cacheAlbumCount": "{count} 张专辑 {size}",
+  "@cacheAlbumCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheSearchUsage": "搜索 {size}",
+  "@cacheSearchUsage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheImageUsage": "图片 {size}",
+  "@cacheImageUsage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearAll": "清除全部缓存",
+  "cacheClearAllMusicSubtitle": "一键删除 Music/KHInsider 下的全部内容（包括已导出的专辑）",
+  "cacheClearAllSubtitle": "一键删除已下载的全部专辑文件",
+  "cacheOther": "其它缓存",
+  "cacheSearchAndPages": "搜索与网页缓存",
+  "cacheSearchPagesSubtitle": "{size} · 搜索结果和专辑页面的 HTML",
+  "@cacheSearchPagesSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearSearch": "清除搜索缓存",
+  "cacheImages": "图片缓存",
+  "cacheImagesSubtitle": "{size} · 封面缩略图",
+  "@cacheImagesSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheClearImages": "清除图片缓存",
+  "cacheCachedAlbums": "已缓存的专辑",
+  "cacheFileCount": "{count} 个文件",
+  "@cacheFileCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cacheDownloading": "下载中",
+  "cacheDeleteAlbum": "删除《{album}》的缓存",
+  "@cacheDeleteAlbum": {
+    "placeholders": {
+      "album": {
+        "type": "String"
+      }
+    }
+  },
+  "actionBack": "返回",
+  "searchSettings": "设置",
+  "searchSettingsWithUpdate": "设置（有可用更新）",
+  "lanTitle": "跨设备同步",
+  "lanThisDevice": "本机",
+  "lanDeviceNameHint": "别的设备会看到这个名字",
+  "lanThisDeviceFavorites": "本机收藏 {count} 张",
+  "@lanThisDeviceFavorites": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanEnabled": "局域网同步已开启",
+  "lanDisabled": "局域网同步已关闭",
+  "lanEnabledSubtitle": "同一 WiFi 下的设备可以互相发现",
+  "lanStarting": "正在启动…",
+  "lanDisabledSubtitle": "关闭后不监听任何端口",
+  "lanDevicesOnWifi": "同一 WiFi 下的设备",
+  "lanRefresh": "刷新",
+  "lanNoDevices": "还没有发现设备",
+  "lanBothDevicesNote": "两台设备都要打开本应用、连同一个 WiFi；",
+  "lanManualHint": "如果网络禁止广播，可在下面手动填地址",
+  "lanAddManually": "手动添加地址",
+  "lanIpAddress": "对方的 IP 地址",
+  "lanIpHint": "自动搜索不到时用这个（例如 192.168.1.23）",
+  "lanAdd": "添加",
+  "lanLocalAddress": "本机地址：{address} —— 两台设备要在同一个网络，且对方的应用还在运行。",
+  "@lanLocalAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "lanMergeExplain": "普通同步只做「合并」：两边都没有的专辑会补上，已有的收藏都不会被删除。",
+  "lanOverwriteExplain": "「强制覆盖」会用一边的收藏替换另一边，被覆盖那边的收藏会消失，所以需要连点两次确认。",
+  "lanAddressPending": "{host}（地址待确认）",
+  "@lanAddressPending": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanFavoritesCount": "收藏 {count} 张",
+  "@lanFavoritesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanTestConnection": "测试连接",
+  "lanTestConnectionSubtitle": "只探测这台设备，不改动任何收藏",
+  "lanSendToDevice": "把本机收藏发送到 {name}",
+  "@lanSendToDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanMergeOnly": "只增不减",
+  "lanPullFromDevice": "把 {name} 的收藏合并到本机",
+  "@lanPullFromDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePush": "强制：用本机收藏覆盖 {name}",
+  "@lanForcePush": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePushConfirm": "再点一次：覆盖 {name} 的收藏",
+  "@lanForcePushConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPeerLoses": "对方原有的收藏会被删除",
+  "lanForcePull": "强制：用 {name} 的收藏覆盖本机",
+  "@lanForcePull": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanForcePullConfirm": "再点一次：覆盖本机的收藏",
+  "lanLocalLoses": "本机原有的收藏会被删除",
+  "lanRemoveManual": "移除手动地址 {host}",
+  "@lanRemoveManual": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanTapToConfirm": "点击即执行，5 秒内没有再点就取消",
+  "lanDiagAt": "（端口 {port}）",
+  "@lanDiagAt": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "lanDiagAtVersion": "（端口 {port}，v{version}）",
+  "@lanDiagAtVersion": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      },
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagNoAnswer": "{name} 的地址探测没有回应{at}：对方可能已经退出、不在同一个网络里，或者路由器把 UDP 也挡了。",
+  "@lanDiagNoAnswer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagTcpBlocked": "{name} 的地址探测有回应{at}，但连不上它的 API：对方的防火墙、路由器的客户端隔离挡住了 TCP，或者对方的应用刚被系统挂起。",
+  "@lanDiagTcpBlocked": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDiagOk": "{name} 一切正常{at}，收藏 {count} 张。",
+  "@lanDiagOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "at": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanStartFailed": "无法启动局域网服务：{error}",
+  "@lanStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanEnterAddress": "请输入地址",
+  "lanNoAnswerFrom": "{address} 上没有回应",
+  "@lanNoAnswerFrom": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreadableResponse": "对方返回的数据无法识别",
+  "lanAnotherDevice": "另一台设备",
+  "lanRefusedHint": "对方的端口拒绝连接：那个端口上没有服务在听（应用每次启动都会重新分配端口，对方可能刚重启过）。",
+  "lanTimeoutHint": "对方没有回应 TCP：对方的应用可能已经不在前台（被系统挂起），也可能是防火墙或路由器的\"客户端隔离\"（AP 隔离）—— UDP 能通、TCP 不通正是这两种情况的特征。请在两边都打开这个页面再试。",
+  "lanUnreachableNoPort": "连不上 {name}（{host}）：它的地址还没有确认，地址探测也没有回应。请让对方的应用保持运行，并确认两台设备在同一个网络里。",
+  "@lanUnreachableNoPort": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreachableSeen": "连不上 {name}（{host}:{port}）：{error}\n它在广播里能看到，但连它的服务端口没有回应。",
+  "@lanUnreachableSeen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanUnreachableAfterRetry": "连不上 {name}（{host}:{port}）：{error}",
+  "@lanUnreachableAfterRetry": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lanBadStatus": "对方返回 {status}",
+  "@lanBadStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "lanDeviceAndroid": "安卓设备 {suffix}",
+  "@lanDeviceAndroid": {
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "lanDeviceApple": "苹果设备 {suffix}",
+  "@lanDeviceApple": {
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "lanStatusOverwrittenByPeer": "{peer} 用它的收藏覆盖了本机：现在有 {total} 张",
+  "@lanStatusOverwrittenByPeer": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanStatusMergedFromPeer": "{peer} 同步过来 {added} 张收藏，本机现有 {total} 张",
+  "@lanStatusMergedFromPeer": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanServiceNotRunning": "局域网服务没有在运行",
+  "lanTestingDevice": "正在测试 {name}…",
+  "@lanTestingDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanSearchingDevices": "正在搜索同一 WiFi 下的设备…",
+  "lanNoOtherDevices": "没有发现其它设备（对方也要打开本应用）",
+  "lanFoundDevices": "发现 {count} 台设备",
+  "@lanFoundDevices": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanAddedDevice": "已添加 {name}",
+  "@lanAddedDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanRemovedHost": "已移除 {host}",
+  "@lanRemovedHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "lanOverwritingDevice": "正在用本机收藏覆盖 {name}…",
+  "@lanOverwritingDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanSendingToDevice": "正在发送到 {name}…",
+  "@lanSendingToDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPushedOverwrite": "已用本机的 {count} 张收藏覆盖 {peer}，对方现在有 {total} 张",
+  "@lanPushedOverwrite": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanPushedMerge": "已发送 {count} 张收藏到 {peer}，对方新增 {added} 张（现有 {total} 张）",
+  "@lanPushedMerge": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanOverwritingLocal": "正在用 {name} 的收藏覆盖本机…",
+  "@lanOverwritingLocal": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanReadingFromDevice": "正在从 {name} 读取…",
+  "@lanReadingFromDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lanPulledOverwrite": "已用 {peer} 的收藏覆盖本机：现在有 {total} 张",
+  "@lanPulledOverwrite": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lanPulledMerge": "{peer} 的收藏已合并：新增 {added} 张，本机现有 {total} 张",
+  "@lanPulledMerge": {
+    "placeholders": {
+      "peer": {
+        "type": "String"
+      },
+      "added": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "actionPrevious": "上一个",
+  "actionNext": "下一个",
+  "actionPlay": "播放",
+  "actionPause": "暂停",
+  "actionStop": "停止",
+  "actionRetry": "重试",
+  "actionSearch": "搜索",
+  "actionDone": "完成",
+  "albumLoadFailed": "加载专辑失败：\n{error}",
+  "@albumLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "albumForceRefresh": "强制刷新（忽略缓存）",
+  "albumDetailsTab": "详情",
+  "albumDetailsTitle": "专辑详情",
+  "albumExportHint": "把已缓存的曲目导出到系统的 Music 目录",
+  "albumSaveHint": "把缓存保存到系统的 Music 目录",
+  "albumCopyPath": "复制缓存目录路径",
+  "albumCopied": "已复制：{path}",
+  "@albumCopied": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "albumExport": "导出到 Music",
+  "osdAudioQuality": "音质",
+  "osdTheme": "主题",
+  "osdThemeWithTooltip": "主题 {tooltip}",
+  "@osdThemeWithTooltip": {
+    "placeholders": {
+      "tooltip": {
+        "type": "String"
+      }
+    }
+  },
+  "searchHint": "搜索游戏原声…",
+  "searchClearHistory": "清空历史",
+  "searchFavorites": "收藏",
+  "searchRecentlyViewed": "最近查看",
+  "searchNoResults": "没有找到专辑",
+  "searchRecentSearches": "最近搜索",
+  "searchIdleTip": "在 KHInsider 上搜索游戏原声。\n提示：用遥控器方向键 / 手柄导航。",
+  "musicFolderQuestion": "把歌曲保存到系统的 Music 目录？",
+  "musicNotNow": "以后再说",
+  "musicOpenSettings": "打开设置",
+  "albumTrackCount": "{count} 首",
+  "@albumTrackCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumFavorite": "收藏",
+  "albumInFavorites": "已收藏",
+  "albumPlayedSavedTo": "播放过的曲目会保存到 Music/KHInsider",
+  "albumCacheKeptHere": "缓存的文件保存在这里，方便你自己查找、导出、删除，或用别的播放器播放。",
+  "albumCopyExplain": "把已下载的曲目复制到 Music/KHInsider，不需要任何权限。",
+  "exportCopyingExplain": "正在把已下载的曲目复制到 Music/KHInsider，不需要任何权限。",
+  "exportLookingForCached": "正在查找已缓存的曲目…",
+  "exportProgress": "{done} / {total} 首",
+  "@exportProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "musicFolderBody": "安卓只有在授予「所有文件访问权限」之后，应用才能写入 Music/ —— 下一个界面里就有 KHInsider 的这个开关。\n\n之后下载的曲目会直接放进 Music/KHInsider，文件管理器、其它播放器和电脑都能看到。已经下载过的曲目仍然留在应用目录里，直到你删除或移动它们。",
+  "musicFolderDenied": "打开「所有文件访问权限」再回来：之后新下载的曲目会存到 Music/KHInsider。"
+}

@@ -5,13 +5,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../data/update_service.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../l10n/l10n.dart';
+import 'locale_controller.dart';
 
 /// Checks GitHub Releases for a version newer than the running app.
 ///
 /// The result is shown in Settings (and as a dot on the settings button) — the
 /// app deliberately has no popup or banner for updates any more.
 class UpdateController extends Notifier<UpdateState> {
+  UpdateController({AppLocalizations Function()? strings})
+    : _stringsOverride = strings;
+
   static const repoSlug = 'trdthg/khinsiderTV';
+
+  /// An explicitly supplied lookup, if any. Without one (the app's case) the
+  /// live locale is read through [ref], so a language change needs no restart.
+  final AppLocalizations Function()? _stringsOverride;
+
+  AppLocalizations Function() get _strings =>
+      _stringsOverride ?? () => stringsFor(ref.read(localeControllerProvider));
 
   @override
   UpdateState build() {
@@ -52,7 +65,7 @@ class UpdateController extends Notifier<UpdateState> {
       state = state.copyWith(
         checking: false,
         hasChecked: true,
-        checkError: '检查更新失败：$e',
+        checkError: _strings().updateCheckFailed('$e'),
       );
     }
   }
@@ -102,7 +115,7 @@ class UpdateController extends Notifier<UpdateState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         downloadPhase: UpdateDownloadPhase.failed,
-        errorMessage: '下载失败：$e',
+        errorMessage: _strings().updateDownloadFailed('$e'),
       );
       return;
     }
@@ -123,7 +136,7 @@ class UpdateController extends Notifier<UpdateState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         downloadPhase: UpdateDownloadPhase.failed,
-        errorMessage: '解压失败：$e',
+        errorMessage: _strings().updateExtractFailed('$e'),
       );
     }
   }
@@ -164,7 +177,7 @@ class UpdateController extends Notifier<UpdateState> {
     if (Platform.isAndroid && !await service.canInstallPackages()) {
       if (!ref.mounted) return;
       state = state.copyWith(
-        installError: '系统还没有允许本应用安装应用，请先打开这个开关',
+        installError: _strings().updateNeedInstallPermission,
         installNeedsPermission: true,
         installFailed: false,
       );
@@ -175,7 +188,10 @@ class UpdateController extends Notifier<UpdateState> {
       await service.installApk(path, forceIntent: forceIntent);
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(installError: '打开安装界面失败：$e', installFailed: true);
+      state = state.copyWith(
+        installError: _strings().updateOpenInstallerFailed('$e'),
+        installFailed: true,
+      );
     }
   }
 
@@ -194,7 +210,7 @@ class UpdateController extends Notifier<UpdateState> {
     }
     if (result.pendingUserAction) {
       state = state.copyWith(
-        installError: '已交给系统安装器，请在系统界面上确认',
+        installError: _strings().updateHandedToInstaller,
         installNeedsPermission: false,
         installFailed: false,
       );
@@ -333,7 +349,11 @@ final updateControllerProvider =
     NotifierProvider<UpdateController, UpdateState>(UpdateController.new);
 
 final updateServiceProvider = Provider<UpdateService>(
-  (ref) => UpdateService(repoSlug: UpdateController.repoSlug),
+  (ref) => UpdateService(
+    repoSlug: UpdateController.repoSlug,
+    // The getter, not a snapshot: a language change must take effect at once.
+    strings: () => stringsFor(ref.read(localeControllerProvider)),
+  ),
 );
 
 /// The running app version, for the About section (independent of whether an

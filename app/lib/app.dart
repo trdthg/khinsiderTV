@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'core/keyboard/global_media_keys.dart';
+import 'l10n/generated/app_localizations.dart';
+import 'l10n/l10n.dart';
 import 'core/widgets/keep_screen_awake.dart';
 import 'core/theme.dart';
 import 'ui/shared/public_music.dart';
+import 'state/locale_controller.dart';
 import 'state/theme_controller.dart';
 import 'state/lan_controller.dart';
 import 'ui/album/album_screen.dart';
@@ -48,10 +51,18 @@ class KhinsiderApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final seedIndex = ref.watch(themeControllerProvider).value ?? 0;
     final seed = AppTheme.seeds[seedIndex.clamp(0, AppTheme.seeds.length - 1)];
+    // English unless the user picked otherwise: `null` (still loading, or the
+    // store could not be read) must not fall back to the system locale, which
+    // on a Chinese phone would show Chinese before the real choice arrives.
+    final locale = ref.watch(localeControllerProvider) ?? defaultLanguage;
+    currentUiLocale = locale;
 
     return MaterialApp(
       title: 'KHInsider',
       navigatorKey: khinsiderNavigatorKey,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: AppTheme.dark(seed: seed),
       onGenerateRoute: (settings) {
         debugPrint('E2E: route ${settings.name} args ${settings.arguments}');

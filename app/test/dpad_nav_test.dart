@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/widgets/dpad_nav.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 
 /// The `stopX` flags: a horizontal row of cards must swallow Left/Right at its
 /// own ends instead of handing the focus to whatever the default traversal
@@ -16,6 +17,9 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         home: Scaffold(
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

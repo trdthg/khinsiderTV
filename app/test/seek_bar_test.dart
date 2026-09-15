@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/widgets/seek_bar.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 
 void main() {
   /// A 100-second track sitting at 30 seconds.
@@ -11,6 +12,9 @@ void main() {
     final seeks = <double>[];
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         home: Scaffold(
           body: Center(
             child: SizedBox(
@@ -78,6 +82,9 @@ void main() {
     final seeks = <double>[];
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         home: Scaffold(
           body: SeekBar(
             position: Duration.zero,

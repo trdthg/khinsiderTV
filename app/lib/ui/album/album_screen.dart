@@ -11,6 +11,7 @@ import '../../core/platform/device.dart';
 import '../../core/widgets/dpad_nav.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/preferences_store.dart';
+import '../../l10n/l10n.dart';
 import '../../state/track_cache_controller.dart';
 import '../../state/album_controller.dart';
 import '../../state/player_controller.dart';
@@ -201,6 +202,7 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = l10n(context);
     final detail = ref.watch(
       albumDetailProvider((widget.albumId, _refreshNonce)),
     );
@@ -231,11 +233,11 @@ class _AlbumScreenState extends ConsumerState<AlbumScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Failed to load album:\n$e', textAlign: TextAlign.center),
+              Text(l.albumLoadFailed('$e'), textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => setState(() => _refreshNonce++),
-                child: const Text('Retry'),
+                child: Text(l.actionRetry),
               ),
             ],
           ),
@@ -394,6 +396,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
   Widget build(BuildContext context) {
     final album = widget.album;
     final zenT = widget.zenT;
+    final l = l10n(context);
 
     if (MediaQuery.sizeOf(context).width <= 700) {
       return _buildMobile(context, album);
@@ -509,7 +512,7 @@ class _AlbumPageState extends ConsumerState<_AlbumPage> {
                                     ),
                                   ),
                                   DpadIconButton(
-                                    tooltip: 'Force refresh (bypass cache)',
+                                    tooltip: l.albumForceRefresh,
                                     icon: Icons.refresh,
                                     onPressed: widget.zen
                                         ? null
@@ -645,6 +648,7 @@ class _InfoPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = l10n(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -655,7 +659,7 @@ class _InfoPanel extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         Text(
-          '${album.trackCount} tracks',
+          l.albumTrackCount(album.trackCount),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -675,7 +679,10 @@ class _InfoPanel extends ConsumerWidget {
         _ExportToMusicButton(album: album),
         if (album.metadata != null) ...[
           const SizedBox(height: 16),
-          Text('Details', style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            l.albumDetailsTab,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 6),
           AlbumMetadataPanel(metadata: album.metadata!),
         ],
@@ -702,6 +709,7 @@ class _MobileAlbumHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final l = l10n(context);
     final metadata = album.metadata;
     // One dim summary line, so the album is identifiable before the user
     // opens the details block.
@@ -748,7 +756,7 @@ class _MobileAlbumHeader extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${album.trackCount} tracks',
+                      l.albumTrackCount(album.trackCount),
                       style: theme.textTheme.bodySmall,
                     ),
                     if (summary.isNotEmpty)
@@ -794,7 +802,10 @@ class _MobileAlbumHeader extends ConsumerWidget {
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(bottom: 6),
                 visualDensity: VisualDensity.compact,
-                title: Text('Album details', style: theme.textTheme.titleSmall),
+                title: Text(
+                  l.albumDetailsTitle,
+                  style: theme.textTheme.titleSmall,
+                ),
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
@@ -844,6 +855,7 @@ class _FavoriteButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = l10n(context);
     final isFav =
         ref.watch(favoritesProvider).value?.any((a) => a.id == album.id) ??
         false;
@@ -856,7 +868,7 @@ class _FavoriteButton extends ConsumerWidget {
           child: FilledButton.tonalIcon(
             onPressed: () {},
             icon: Icon(isFav ? Icons.favorite : Icons.favorite_border),
-            label: Text(isFav ? 'In favorites' : 'Favorite'),
+            label: Text(isFav ? l.albumInFavorites : l.albumFavorite),
           ),
         ),
       ),
@@ -879,12 +891,13 @@ class _CacheFolderHint extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = l10n(context);
     final albumId = album.summary.id;
     final cache = ref.watch(albumCacheProvider);
     if (cache.albumId != albumId) return const SizedBox.shrink();
     final path = cache.folderPath;
     final scheme = Theme.of(context).colorScheme;
-    final text = path ?? 'Played tracks are saved to Music/KHInsider';
+    final text = path ?? l.albumPlayedSavedTo;
     final canRelocate =
         offerPublicMusic &&
         ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder;
@@ -912,9 +925,7 @@ class _CacheFolderHint extends ConsumerWidget {
           ),
           Expanded(
             child: Tooltip(
-              message:
-                  'Cached files are kept here so you can find, export, '
-                  'delete or play them with any other player.',
+              message: l.albumCacheKeptHere,
               waitDuration: const Duration(milliseconds: 350),
               child: Text(
                 text,
@@ -926,20 +937,20 @@ class _CacheFolderHint extends ConsumerWidget {
           ),
           if (canExport)
             DpadIconButton(
-              tooltip: 'Export cached tracks to the system Music folder',
+              tooltip: l.albumExportHint,
               iconSize: 16,
               icon: Icons.library_music_outlined,
               onPressed: () => exportAlbumToMusic(context, ref, album),
             ),
           if (canRelocate)
             DpadIconButton(
-              tooltip: 'Save the cache in the system Music folder',
+              tooltip: l.albumSaveHint,
               iconSize: 16,
               icon: Icons.drive_file_move_outlined,
               onPressed: () => offerPublicMusicFolder(context, ref),
             ),
           DpadIconButton(
-            tooltip: 'Copy cache folder path',
+            tooltip: l.albumCopyPath,
             iconSize: 16,
             icon: Icons.copy,
             onPressed: path == null
@@ -947,9 +958,9 @@ class _CacheFolderHint extends ConsumerWidget {
                 : () async {
                     await Clipboard.setData(ClipboardData(text: path));
                     if (!context.mounted) return;
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('Copied: $path')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l.albumCopied(path))),
+                    );
                   },
           ),
         ],
@@ -973,14 +984,13 @@ class _ExportToMusicButton extends ConsumerWidget {
     if (!ref.watch(audioCacheManagerProvider).supportsPublicMusicFolder) {
       return const SizedBox.shrink();
     }
+    final l = l10n(context);
     return Tooltip(
-      message:
-          'Copy the downloaded tracks into Music/KHInsider. No permission '
-          'needed.',
+      message: l.albumCopyExplain,
       child: FilledButton.tonalIcon(
         onPressed: () => exportAlbumToMusic(context, ref, album),
         icon: const Icon(Icons.library_music_outlined, size: 18),
-        label: const Text('Export to Music'),
+        label: Text(l.albumExport),
       ),
     );
   }

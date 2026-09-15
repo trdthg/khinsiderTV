@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/platform/device.dart';
 import 'package:khinsider/core/widgets/keep_screen_awake.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/player_controller.dart';
 
 import 'album_layout_test.dart' show FakeAudioPlayer, SeededPlayerController;
@@ -45,6 +46,9 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: KeepScreenAwake(child: SizedBox.shrink()),
         ),
       ),

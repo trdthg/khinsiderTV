@@ -276,9 +276,9 @@ void main() {
         isA<LanException>().having(
           (e) => e.message,
           'message',
-          // The address has to be in the message: "连不上 X" alone is what made
-          // the first field report impossible to act on.
-          allOf(contains('127.0.0.1:1'), contains('连不上')),
+          // The address has to be in the message: "Cannot reach X" alone is
+          // what made the first field report impossible to act on.
+          allOf(contains('127.0.0.1:1'), contains('Cannot reach')),
         ),
       ),
     );
@@ -312,7 +312,7 @@ void main() {
     'every beacon carries the favorites count, so peers see a real number',
     () async {
       // The first release sent probes and pongs with no count at all, and every
-      // discovered device showed "0 个收藏" because 0 is also the default.
+      // discovered device showed "0 favorites" because 0 is also the default.
       final service = LanService(
         deviceId: 'aaaaaaaa',
         deviceName: 'Device A',
@@ -475,11 +475,11 @@ void main() {
   test('a failed test connection says which half failed', () {
     const silent = LanPeerDiagnosis(udp: false, tcp: false);
     expect(silent.ok, isFalse);
-    expect(silent.describe('TV'), contains('地址探测没有回应'));
+    expect(silent.describe('TV'), contains('did not answer the address probe'));
 
     const tcpBlocked = LanPeerDiagnosis(udp: true, tcp: false, port: 41234);
     expect(tcpBlocked.describe('TV'), contains('41234'));
-    expect(tcpBlocked.describe('TV'), contains('客户端隔离'));
+    expect(tcpBlocked.describe('TV'), contains('client isolation'));
 
     const fine = LanPeerDiagnosis(
       udp: true,
@@ -489,7 +489,7 @@ void main() {
       favorites: 12,
     );
     expect(fine.ok, isTrue);
-    expect(fine.describe('TV'), contains('一切正常'));
+    expect(fine.describe('TV'), contains('is fine'));
     expect(fine.describe('TV'), contains('12'));
   });
 

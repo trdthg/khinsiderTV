@@ -8,6 +8,7 @@ import '../../core/dir_size.dart';
 import '../../core/widgets/dpad_tile.dart';
 import '../../data/image_cache.dart';
 import '../../data/khinsider_client.dart';
+import '../../l10n/l10n.dart';
 import '../../state/track_cache_controller.dart';
 import 'settings_widgets.dart';
 
@@ -82,9 +83,10 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
 
   Future<void> _clearAll() async {
     final freed = _totalBytes;
+    final l = l10n(context);
     setState(() {
       _busy = true;
-      _status = '正在清除…';
+      _status = l.cacheClearing;
     });
     try {
       await _cache.clear();
@@ -93,78 +95,87 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
       await _reload();
       setState(() {
         _busy = false;
-        _status = freed > 0 ? '已清除 ${formatBytes(freed)}' : '没有可清除的缓存';
+        _status = freed > 0
+            ? l.cacheCleared(formatBytes(freed))
+            : l.cacheNothingToClear;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = '清除失败：$e';
+        _status = l.cacheClearFailed('$e');
       });
     }
   }
 
   Future<void> _clearPages() async {
     final freed = _pageBytes;
+    final l = l10n(context);
     setState(() {
       _busy = true;
-      _status = '正在清除搜索缓存…';
+      _status = l.cacheClearingSearch;
     });
     try {
       await ref.read(httpCacheProvider).clear();
       await _reload();
       setState(() {
         _busy = false;
-        _status = freed > 0 ? '已清除搜索缓存 ${formatBytes(freed)}' : '搜索缓存本来就是空的';
+        _status = freed > 0
+            ? l.cacheSearchCleared(formatBytes(freed))
+            : l.cacheSearchAlreadyEmpty;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = '清除失败：$e';
+        _status = l.cacheClearFailed('$e');
       });
     }
   }
 
   Future<void> _clearImages() async {
     final freed = _imageBytes;
+    final l = l10n(context);
     setState(() {
       _busy = true;
-      _status = '正在清除图片缓存…';
+      _status = l.cacheClearingImages;
     });
     try {
       await _clearImageCache();
       await _reload();
       setState(() {
         _busy = false;
-        _status = freed > 0 ? '已清除图片缓存 ${formatBytes(freed)}' : '图片缓存本来就是空的';
+        _status = freed > 0
+            ? l.cacheImagesCleared(formatBytes(freed))
+            : l.cacheImagesAlreadyEmpty;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = '清除失败：$e';
+        _status = l.cacheClearFailed('$e');
       });
     }
   }
 
   Future<void> _delete(CachedAlbum album) async {
+    final l = l10n(context);
     setState(() {
       _busy = true;
-      _status = '正在删除《${album.title}》…';
+      _status = l.cacheDeleting(album.title);
     });
     try {
       await _cache.deleteCachedAlbum(album.path);
       await _reload();
       setState(() {
         _busy = false;
-        _status = '已删除《${album.title}》(${formatBytes(album.bytes)})';
+        _status = l.cacheDeleted(album.title, formatBytes(album.bytes));
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = '删除失败：$e';
+        _status = l.cacheDeleteFailed('$e');
       });
     }
   }
@@ -173,11 +184,12 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
   Widget build(BuildContext context) {
     final albums = _albums;
     final theme = Theme.of(context);
+    final l = l10n(context);
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            const SettingsHeader(title: '缓存'),
+            SettingsHeader(title: l.cacheTitle),
             // Keeps its height when idle so the list does not jump.
             SizedBox(
               height: 4,
@@ -195,7 +207,7 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                       padding: const EdgeInsets.only(bottom: 24),
                       children: [
                         SettingsSection(
-                          title: '位置',
+                          title: l.cacheLocation,
                           children: [
                             SettingsRow(
                               icon: _publicMusic
@@ -203,59 +215,65 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                                   : Icons.folder_outlined,
                               title: _root ?? '',
                               subtitle: _publicMusic
-                                  ? '公开的 Music 目录：这里的文件同时是导出到 Music 的专辑'
-                                  : '应用私有目录',
+                                  ? l.cachePublicMusic
+                                  : l.cacheAppPrivate,
                             ),
                           ],
                         ),
                         SettingsSection(
-                          title: '占用',
+                          title: l.cacheUsage,
                           children: [
                             SettingsRow(
                               icon: Icons.sd_storage_outlined,
                               title: formatBytes(_totalBytes),
                               subtitle: [
                                 albums.isEmpty
-                                    ? '还没有缓存任何专辑'
-                                    : '${albums.length} 张专辑 ${formatBytes(_albumBytes)}',
+                                    ? l.cacheNoAlbums
+                                    : l.cacheAlbumCount(
+                                        albums.length,
+                                        formatBytes(_albumBytes),
+                                      ),
                                 if (_pageBytes > 0)
-                                  '搜索 ${formatBytes(_pageBytes)}',
+                                  l.cacheSearchUsage(formatBytes(_pageBytes)),
                                 if (_imageBytes > 0)
-                                  '图片 ${formatBytes(_imageBytes)}',
+                                  l.cacheImageUsage(formatBytes(_imageBytes)),
                               ].join(' · '),
                             ),
                             SettingsRow(
                               icon: Icons.delete_sweep_outlined,
-                              title: '清除全部缓存',
+                              title: l.cacheClearAll,
                               subtitle: _publicMusic
-                                  ? '一键删除 Music/KHInsider 下的全部内容（包括已导出的专辑）'
-                                  : '一键删除已下载的全部专辑文件',
+                                  ? l.cacheClearAllMusicSubtitle
+                                  : l.cacheClearAllSubtitle,
                               danger: true,
                               onSelect: _busy ? null : _clearAll,
                             ),
                           ],
                         ),
                         SettingsSection(
-                          title: '其它缓存',
+                          title: l.cacheOther,
                           children: [
                             SettingsRow(
                               icon: Icons.travel_explore_outlined,
-                              title: '搜索与网页缓存',
-                              subtitle:
-                                  '${formatBytes(_pageBytes)} · 搜索结果和专辑页面的 HTML',
+                              title: l.cacheSearchAndPages,
+                              subtitle: l.cacheSearchPagesSubtitle(
+                                formatBytes(_pageBytes),
+                              ),
                               trailing: DpadIconButton(
                                 icon: Icons.delete_outline,
-                                tooltip: '清除搜索缓存',
+                                tooltip: l.cacheClearSearch,
                                 onPressed: _busy ? null : _clearPages,
                               ),
                             ),
                             SettingsRow(
                               icon: Icons.image_outlined,
-                              title: '图片缓存',
-                              subtitle: '${formatBytes(_imageBytes)} · 封面缩略图',
+                              title: l.cacheImages,
+                              subtitle: l.cacheImagesSubtitle(
+                                formatBytes(_imageBytes),
+                              ),
                               trailing: DpadIconButton(
                                 icon: Icons.delete_outline,
-                                tooltip: '清除图片缓存',
+                                tooltip: l.cacheClearImages,
                                 onPressed: _busy ? null : _clearImages,
                               ),
                             ),
@@ -263,20 +281,21 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                         ),
                         if (albums.isNotEmpty)
                           SettingsSection(
-                            title: '已缓存的专辑',
+                            title: l.cacheCachedAlbums,
                             children: [
                               for (final album in albums)
                                 SettingsRow(
                                   icon: Icons.album_outlined,
                                   title: album.title,
                                   subtitle: [
-                                    if (album.tracks > 0) '${album.tracks} 个文件',
+                                    if (album.tracks > 0)
+                                      l.cacheFileCount(album.tracks),
                                     formatBytes(album.bytes),
-                                    if (album.downloading) '下载中',
+                                    if (album.downloading) l.cacheDownloading,
                                   ].join(' · '),
                                   trailing: DpadIconButton(
                                     icon: Icons.delete_outline,
-                                    tooltip: '删除《${album.title}》的缓存',
+                                    tooltip: l.cacheDeleteAlbum(album.title),
                                     onPressed: _busy
                                         ? null
                                         : () => _delete(album),

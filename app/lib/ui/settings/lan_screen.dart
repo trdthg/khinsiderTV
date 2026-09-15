@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/platform/device.dart';
 import '../../data/lan/lan_device.dart';
 import '../../data/preferences_store.dart';
+import '../../l10n/l10n.dart';
 import '../../state/lan_controller.dart';
 import '../search/tv_system_text_field.dart';
 import 'settings_widgets.dart';
@@ -56,6 +57,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = l10n(context);
     final async = ref.watch(lanControllerProvider);
     final state = async.value;
     final notifier = ref.read(lanControllerProvider.notifier);
@@ -65,7 +67,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const SettingsHeader(title: '跨设备同步'),
+            SettingsHeader(title: l.lanTitle),
             // The bar keeps its 4px even when idle: swapping it in and out
             // made the whole list jump while a sync was running.
             SizedBox(
@@ -84,25 +86,27 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                       padding: const EdgeInsets.only(bottom: 28),
                       children: [
                         SettingsSection(
-                          title: '本机',
+                          title: l.lanThisDevice,
                           children: [
                             SettingsRow(
                               icon: Icons.smartphone,
                               title: state.name,
                               subtitle:
-                                  '别的设备会看到这个名字'
-                                  '${favorites == null ? '' : ' · 本机收藏 $favorites 张'}',
+                                  '${l.lanDeviceNameHint}'
+                                  '${favorites == null ? '' : ' · ${l.lanThisDeviceFavorites(favorites)}'}',
                             ),
                             SettingsRow(
                               icon: state.enabled
                                   ? Icons.wifi_tethering
                                   : Icons.wifi_tethering_off,
-                              title: state.enabled ? '局域网同步已开启' : '局域网同步已关闭',
+                              title: state.enabled
+                                  ? l.lanEnabled
+                                  : l.lanDisabled,
                               subtitle: state.enabled
                                   ? state.running
-                                        ? '同一 WiFi 下的设备可以互相发现'
-                                        : (state.error ?? '正在启动…')
-                                  : '关闭后不监听任何端口',
+                                        ? l.lanEnabledSubtitle
+                                        : (state.error ?? l.lanStarting)
+                                  : l.lanDisabledSubtitle,
                               danger: state.enabled && !state.running,
                               trailing: Icon(
                                 state.enabled
@@ -120,21 +124,20 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                         ),
                         if (state.enabled)
                           SettingsSection(
-                            title: '同一 WiFi 下的设备',
+                            title: l.lanDevicesOnWifi,
                             // Disabled rather than hidden: a button that
                             // vanishes mid-tap is worse than a grey one.
                             trailing: TextButton(
                               onPressed: state.busy ? null : notifier.refresh,
-                              child: const Text('刷新'),
+                              child: Text(l.lanRefresh),
                             ),
                             children: [
                               if (state.devices.isEmpty)
-                                const SettingsRow(
+                                SettingsRow(
                                   icon: Icons.search,
-                                  title: '还没有发现设备',
+                                  title: l.lanNoDevices,
                                   subtitle:
-                                      '两台设备都要打开本应用、连同一个 WiFi；'
-                                      '如果网络禁止广播，可在下面手动填地址',
+                                      '${l.lanBothDevicesNote} ${l.lanManualHint}',
                                 ),
                               for (final device in state.devices)
                                 ..._deviceRows(
@@ -147,12 +150,12 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                           ),
                         if (state.enabled)
                           SettingsSection(
-                            title: '手动添加地址',
+                            title: l.lanAddManually,
                             children: [
                               SettingsRow(
                                 icon: Icons.keyboard,
-                                title: '对方的 IP 地址',
-                                subtitle: '自动搜索不到时用这个（例如 192.168.1.23）',
+                                title: l.lanIpAddress,
+                                subtitle: l.lanIpHint,
                                 trailing: SizedBox(
                                   width: 160,
                                   child: _hostField(context),
@@ -160,7 +163,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                               ),
                               SettingsRow(
                                 icon: Icons.add_link,
-                                title: '添加',
+                                title: l.lanAdd,
                                 onSelect: state.busy ? null : _addHost,
                               ),
                             ],
@@ -187,19 +190,17 @@ class _LanScreenState extends ConsumerState<LanScreen> {
                               const SizedBox(height: 10),
                               if (state.localAddress != null)
                                 Text(
-                                  '本机地址：${state.localAddress}'
-                                  '${state.localPort == null ? '' : ':${state.localPort}'}'
-                                  ' —— 两台设备要在同一个网络，且对方的应用还在运行。',
+                                  l.lanLocalAddress(
+                                    '${state.localAddress}'
+                                    '${state.localPort == null ? '' : ':${state.localPort}'}',
+                                  ),
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               const SizedBox(height: 6),
                               Text(
-                                '普通同步只做「合并」：两边都没有的专辑会补上，'
-                                '已有的收藏都不会被删除。\n'
-                                '「强制覆盖」会用一边的收藏替换另一边，'
-                                '被覆盖那边的收藏会消失，所以需要连点两次确认。',
+                                '${l.lanMergeExplain}\n${l.lanOverwriteExplain}',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -223,14 +224,18 @@ class _LanScreenState extends ConsumerState<LanScreen> {
     LanController notifier,
   ) {
     final expanded = _expanded == device.id;
+    final l = l10n(context);
     return [
       SettingsRow(
         icon: Icons.devices,
         title: device.name,
         subtitle: [
-          if (device.port == 0) '${device.host}（地址待确认）' else device.host,
+          if (device.port == 0)
+            l.lanAddressPending(device.host)
+          else
+            device.host,
           if (device.version.isNotEmpty) 'v${device.version}',
-          '收藏 ${device.favorites} 张',
+          l.lanFavoritesCount(device.favorites),
         ].join(' · '),
         trailing: Icon(
           expanded ? Icons.expand_less : Icons.expand_more,
@@ -246,14 +251,14 @@ class _LanScreenState extends ConsumerState<LanScreen> {
       if (expanded) ...[
         SettingsRow(
           icon: Icons.wifi_tethering,
-          title: '测试连接',
-          subtitle: '只探测这台设备，不改动任何收藏',
+          title: l.lanTestConnection,
+          subtitle: l.lanTestConnectionSubtitle,
           onSelect: state.busy ? null : () => notifier.testConnection(device),
         ),
         SettingsRow(
           icon: Icons.upload,
-          title: '把本机收藏发送到 ${device.name}',
-          subtitle: '只增不减',
+          title: l.lanSendToDevice(device.name),
+          subtitle: l.lanMergeOnly,
           onSelect: state.busy
               ? null
               : () {
@@ -263,8 +268,8 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         ),
         SettingsRow(
           icon: Icons.download,
-          title: '把 ${device.name} 的收藏合并到本机',
-          subtitle: '只增不减',
+          title: l.lanPullFromDevice(device.name),
+          subtitle: l.lanMergeOnly,
           onSelect: state.busy
               ? null
               : () {
@@ -275,9 +280,9 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         _overwriteRow(
           key: 'send:${device.id}',
           icon: Icons.upload_file,
-          title: '强制：用本机收藏覆盖 ${device.name}',
-          confirmTitle: '再点一次：覆盖 ${device.name} 的收藏',
-          subtitle: '对方原有的收藏会被删除',
+          title: l.lanForcePush(device.name),
+          confirmTitle: l.lanForcePushConfirm(device.name),
+          subtitle: l.lanPeerLoses,
           busy: state.busy,
           onConfirmed: () {
             setState(() => _expanded = null);
@@ -287,9 +292,9 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         _overwriteRow(
           key: 'pull:${device.id}',
           icon: Icons.download_for_offline,
-          title: '强制：用 ${device.name} 的收藏覆盖本机',
-          confirmTitle: '再点一次：覆盖本机的收藏',
-          subtitle: '本机原有的收藏会被删除',
+          title: l.lanForcePull(device.name),
+          confirmTitle: l.lanForcePullConfirm,
+          subtitle: l.lanLocalLoses,
           busy: state.busy,
           onConfirmed: () {
             setState(() => _expanded = null);
@@ -299,7 +304,7 @@ class _LanScreenState extends ConsumerState<LanScreen> {
         if (state.manualHosts.contains(device.host))
           SettingsRow(
             icon: Icons.link_off,
-            title: '移除手动地址 ${device.host}',
+            title: l.lanRemoveManual(device.host),
             danger: true,
             onSelect: () => notifier.removeManual(device.host),
           ),
@@ -319,11 +324,12 @@ class _LanScreenState extends ConsumerState<LanScreen> {
     required bool busy,
     required VoidCallback onConfirmed,
   }) {
+    final l = l10n(context);
     if (_confirm == key) {
       return SettingsRow(
         icon: Icons.warning_amber,
         title: confirmTitle,
-        subtitle: '点击即执行，5 秒内没有再点就取消',
+        subtitle: l.lanTapToConfirm,
         danger: true,
         onSelect: () {
           _confirmTimer?.cancel();

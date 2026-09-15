@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/core/widgets/dpad_tile.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 
 /// Regression: mouse clicks must move keyboard focus. Previously, clicking a
 /// row left focus on the autofocused first row, so Enter/Space always
@@ -14,6 +15,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
         home: Scaffold(
           body: Column(
             children: [

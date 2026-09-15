@@ -11,6 +11,7 @@ import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/core/keyboard/global_media_keys.dart';
 import 'package:khinsider/data/khinsider_client.dart';
 import 'package:khinsider/core/widgets/seek_bar.dart';
+import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/search_controller.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
@@ -191,6 +192,9 @@ void main() {
             khinsiderClientProvider.overrideWithValue(StubClient()),
           ],
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: Locale('en'),
             // GlobalMediaKeys is installed by KhinsiderApp's `builder`, so it
             // has to be reproduced here for the media-key test to reach it.
             builder: (context, child) =>
@@ -325,6 +329,9 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: Scaffold(
             body: SeekBar(
               position: const Duration(seconds: 30),
@@ -355,6 +362,9 @@ void main() {
       double? sought;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: Scaffold(
             body: Center(
               child: SizedBox(
