@@ -200,21 +200,55 @@ class SyncAdvice {
 
 /// Drift small enough to ignore: below this the correction is more likely to
 /// be the measurement's own noise than a real offset.
-const Duration syncDeadZone = Duration(milliseconds: 25);
+const Duration syncDeadZone = Duration(milliseconds: 30);
 
-/// Drift beyond which nudging the speed would take too long — the ear hears
-/// an echo long before that, so it is better to seek once and be done.
-const Duration syncSeekThreshold = Duration(milliseconds: 120);
+/// Drift beyond which leaning on the playback rate would take too long, so a
+/// single seek is the lesser evil.
+///
+/// Deliberately generous. Seeking a track that is still being cached costs a
+/// re-open and a fresh buffer — that is heard as a gap — so the rate correction
+/// is given a wide band to work in (5% removes 250ms in five seconds).
+const Duration syncSeekThreshold = Duration(milliseconds: 250);
+
+/// A seek needs a moment before the position it reports means anything. Acting
+/// on the in-flight value turns one correction into a burst of them.
+const Duration syncSettleAfterSeek = Duration(milliseconds: 800);
+
+/// The least time between two seeks. Even a real drift is not worth a gap every
+/// half second, and the rate correction keeps working meanwhile.
+const Duration syncSeekCooldown = Duration(milliseconds: 5000);
 
 /// How much of the drift to remove per second while nudging. 1/s means the
 /// whole difference is gone in a second; the cap below keeps the rate change
 /// inaudible.
 const double syncNudgePerSecond = 0.5;
 
-/// The most the playback rate is ever moved by. 3% is at the edge of what a
+/// The most the playback rate is ever moved by. 5% is at the edge of what a
 /// listener notices on a sustained note, and the nudge only lasts until the
 /// drift is gone.
-const double syncMaxRateDelta = 0.03;
+const double syncMaxRateDelta = 0.05;
+
+/// Where the local player actually is, given a sample that was taken
+/// [sampledAtMillis] and only arrives every so often (just_audio ticks about
+/// five times a second).
+///
+/// This matters more than it looks. Comparing a sample that is up to 200ms old
+/// against a target that is extrapolated to *now* invents a drift of exactly
+/// that much, so the correction chases a difference that does not exist — with
+/// a seek, every half second, which is heard as stuttering.
+Duration livePosition({
+  required Duration sampled,
+  required int sampledAtMillis,
+  required int nowMillis,
+  required bool playing,
+}) {
+  if (!playing) return sampled;
+  final elapsed = nowMillis - sampledAtMillis;
+  // A sample from the future, or a clock that went backwards, is not something
+  // to extrapolate from.
+  if (elapsed <= 0) return sampled;
+  return sampled + Duration(milliseconds: elapsed);
+}
 
 /// Where this device should be at local time [nowMillis].
 Duration syncTarget({
@@ -236,9 +270,17 @@ SyncAdvice adviseSync({
   required int nowMillis,
   required int offsetMillis,
   required Duration localPosition,
+  int? localSampledAtMillis,
   required bool localPlaying,
   Duration delay = Duration.zero,
 }) {
+  // Extrapolated to now, not read as-is: see [livePosition].
+  final local = livePosition(
+    sampled: localPosition,
+    sampledAtMillis: localSampledAtMillis ?? nowMillis,
+    nowMillis: nowMillis,
+    playing: localPlaying,
+  );
   final target = syncTarget(
     snapshot: snapshot,
     nowMillis: nowMillis,
@@ -249,16 +291,16 @@ SyncAdvice adviseSync({
   // Paused (or never started): the only thing that matters is agreeing on the
   // position, so the next play starts together.
   if (!snapshot.playing) {
-    final behind = target - localPosition;
+    final behind = target - local;
     return SyncAdvice(
       target: target,
-      drift: localPosition - target,
+      drift: local - target,
       seekTo: behind.abs() > syncSeekThreshold ? target : null,
       play: localPlaying ? false : null,
     );
   }
 
-  final drift = localPosition - target;
+  final drift = local - target;
   final magnitude = drift.abs();
 
   // Big drift: one seek. Small drift: lean on the playback rate, which is

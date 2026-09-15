@@ -135,6 +135,55 @@ void main() {
       expect(behind.speed, lessThan(1.0 + syncMaxRateDelta));
     });
 
+    test('a position sample that is a little old is not read as drift', () {
+      // just_audio reports the position about five times a second, so a sample
+      // read as "now" invents up to 200ms of drift. The correction then chases
+      // a difference that does not exist — with a seek, every half second,
+      // which is heard as stuttering.
+      final extrapolated = adviseSync(
+        snapshot: snapshot,
+        nowMillis: 97000,
+        offsetMillis: offset,
+        localPosition: const Duration(milliseconds: 11800),
+        localSampledAtMillis: 96800,
+        localPlaying: true,
+      );
+      expect(extrapolated.drift.inMilliseconds, closeTo(0, 5));
+      expect(extrapolated.needsSeek, isFalse);
+
+      // The same sample taken at face value — what the follower used to do.
+      final naive = adviseSync(
+        snapshot: snapshot,
+        nowMillis: 97000,
+        offsetMillis: offset,
+        localPosition: const Duration(milliseconds: 11800),
+        localPlaying: true,
+      );
+      expect(naive.drift.inMilliseconds, lessThan(-100));
+    });
+
+    test('a paused player is not extrapolated forwards', () {
+      expect(
+        livePosition(
+          sampled: const Duration(seconds: 5),
+          sampledAtMillis: 1000,
+          nowMillis: 9000,
+          playing: false,
+        ),
+        const Duration(seconds: 5),
+      );
+      // And a sample from the future is not extrapolated backwards either.
+      expect(
+        livePosition(
+          sampled: const Duration(seconds: 5),
+          sampledAtMillis: 9000,
+          nowMillis: 1000,
+          playing: true,
+        ),
+        const Duration(seconds: 5),
+      );
+    });
+
     test('far out of step seeks instead of crawling back', () {
       final advice = adviseSync(
         snapshot: snapshot,

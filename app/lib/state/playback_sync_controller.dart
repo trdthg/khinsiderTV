@@ -108,7 +108,23 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   PlaybackSnapshot? _applied;
   int _lastPingSent = 0;
   Duration _localPosition = Duration.zero;
+
+  /// When [_localPosition] was sampled. just_audio ticks about five times a
+  /// second, so a sample read as-is is up to 200ms out of date — which reads as
+  /// a drift that is not there and sends the correction chasing it.
+  int _localPositionAt = 0;
   bool _localPlaying = false;
+
+  /// The rate currently set on the player, so it is only written when it
+  /// changes: setting the same rate every tick makes just_audio reconfigure its
+  /// audio output, which is audible.
+  double _appliedSpeed = 1.0;
+  int _lastSeekAt = 0;
+  int _settleUntil = 0;
+
+  /// One correction at a time: the ticker fires on a timer while a correction
+  /// may still be awaiting the player, and overlapping seeks are audible.
+  bool _correcting = false;
 
   /// True while the follower is applying the host's state to its own player:
   /// those writes must go to the player, never back out as commands.
@@ -350,6 +366,10 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     _clock.reset();
     _remote = null;
     _applied = null;
+    _appliedSpeed = 1.0;
+    _lastSeekAt = 0;
+    _settleUntil = 0;
+    _nextLoadAttempt = 0;
     if (socket != null) {
       try {
         await socket.close();
@@ -365,8 +385,13 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   void _listenToLocalPlayer() {
     final player = ref.read(audioPlayerProvider);
     _localPosition = ref.read(playerControllerProvider).position;
+    _localPositionAt = _now;
     _localPlaying = ref.read(playerControllerProvider).playing;
-    _positionSub = player.positionStream.listen((pos) => _localPosition = pos);
+    _positionSub = player.positionStream.listen((pos) {
+      _localPosition = pos;
+      // The value is only true at the instant it arrives.
+      _localPositionAt = _now;
+    });
     _snapshotSub = player.snapshotStream.listen((s) {
       _localPlaying = s.playing;
     });
@@ -468,7 +493,15 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
       // Straight to where the host is, instead of starting at zero and drifting
       // in over the next few seconds.
       final target = _target();
-      if (target != null) await local.seek(target);
+      _settleUntil = _now + syncSettleAfterSeek.inMilliseconds;
+      if (target != null) {
+        try {
+          await local.seek(target);
+        } catch (_) {
+          // Not fatal: the correction loop reaches the same place without
+          // interrupting anything, so this is not worth reporting.
+        }
+      }
       // Marked as loaded only now: setting this first (as it did before) meant a
       // failed load was never retried for that track, so the follower stayed
       // silent for the whole song it could not open.
@@ -503,7 +536,8 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
   Future<void> _tick() async {
     final remote = _remote;
     final offset = _clock.offsetMillis;
-    if (remote == null || offset == null) return;
+    if (remote == null || offset == null || _correcting) return;
+    _correcting = true;
     try {
       await _apply(remote, offset);
     } catch (e) {
@@ -515,32 +549,57 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
           error: stringsFor(currentUiLocale).syncFailed('$e'),
         );
       }
+    } finally {
+      _correcting = false;
     }
   }
 
   Future<void> _apply(PlaybackSnapshot remote, int offset) async {
     final local = ref.read(audioPlayerProvider);
+    final now = _now;
     final advice = adviseSync(
       snapshot: remote,
-      nowMillis: _now,
+      nowMillis: now,
       offsetMillis: offset,
       localPosition: _localPosition,
+      localSampledAtMillis: _localPositionAt,
       localPlaying: _localPlaying,
       delay: state.delay,
     );
-    // Order matters: land in the right place, then agree on whether it plays.
-    if (advice.needsSeek) await local.seek(advice.seekTo!);
-    await local.setSpeed(advice.speed);
+
+    // Whether a *position* correction would mean anything yet: the track is
+    // still loading, or a seek is still settling, so what the player reports
+    // says nothing about the drift.
+    final settling =
+        now < _settleUntil || ref.read(playerControllerProvider).processing;
+
+    // Agreeing on play/pause always happens: a pause must never be missed.
     if (advice.play == true) {
       await local.play();
     } else if (advice.play == false) {
       await local.pause();
     }
+
+    if (!settling) {
+      if (advice.needsSeek) {
+        if (now - _lastSeekAt >= syncSeekCooldown.inMilliseconds) {
+          _lastSeekAt = now;
+          _settleUntil = now + syncSettleAfterSeek.inMilliseconds;
+          await local.seek(advice.seekTo!);
+        }
+      } else if ((advice.speed - _appliedSpeed).abs() > 0.002) {
+        _appliedSpeed = advice.speed;
+        await local.setSpeed(advice.speed);
+      }
+    }
+
     if (!ref.mounted) return;
     state = state.copyWith(
-      drift: advice.drift,
+      drift: settling ? state.drift : advice.drift,
       aligned: true,
       status: _statusLine(),
+      // A transient failure clears itself once a correction lands again.
+      error: null,
     );
   }
 
