@@ -1121,7 +1121,7 @@
 - [x] 测试 +2（共 30 条）：200ms 的旧采样不再被当成偏差（并对比「按字面读」确实会读出 -200ms）；
       `livePosition` 在暂停与采样时间倒流时都不外推。
 
-## AG. 未发布（v0.3.9）：主机上一直显示 0 following
+## AG. 已发布（v0.3.9）：主机上一直显示 0 following
 
 - [x] **根因**：`state.followers` 只在 `startHosting()` 那一刻读了一次 `service.followerCount` ——
       而那一刻通常还没有任何设备连上来，所以永远是 0，之后也没人再更新。
