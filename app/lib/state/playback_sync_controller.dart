@@ -505,15 +505,7 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
       // in over the next few seconds.
       final target = _target();
       _settleUntil = _now + syncSettleAfterSeek.inMilliseconds;
-      // Only a shallow jump. Deep into a track this device has not buffered,
-      // a seek means re-fetching from the start of the stream, which stalls —
-      // and the stall is heard as stuttering, which is worse than starting the
-      // track from the beginning and lining up properly on the next one.
-      if (target != null && target <= syncAdoptSeekLimit) {
-        try {
-          await local.seek(target);
-        } catch (_) {}
-      }
+      if (target != null) _fire(local.seek(target));
       _appliedSpeed = 1.0;
       // Marked as loaded only now: setting this first (as it did before) meant a
       // failed load was never retried for that track, so the follower stayed
@@ -552,7 +544,9 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     if (remote == null || offset == null || _correcting) return;
     _correcting = true;
     try {
-      await _apply(remote, offset);
+      // Bounded: a player call that never returns must not disable every later
+      // correction, which is exactly what happened.
+      await _apply(remote, offset).timeout(const Duration(seconds: 3));
     } catch (e) {
       // A correction that throws (no source loaded, player in a bad state) must
       // not disappear into an unawaited future: it is exactly the kind of
@@ -587,10 +581,15 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
         now < _settleUntil || ref.read(playerControllerProvider).processing;
 
     // Agreeing on play/pause always happens: a pause must never be missed.
+    //
+    // Never awaited. just_audio's play() completes when playback *ends*, not
+    // when it starts, so awaiting it here left the correction loop waiting for
+    // the track to finish: every later correction was skipped, and the drift
+    // simply stayed where it was, however large.
     if (advice.play == true) {
-      await local.play();
+      _fire(local.play());
     } else if (advice.play == false) {
-      await local.pause();
+      _fire(local.pause());
     }
 
     if (!settling) {
@@ -598,11 +597,11 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
         if (now - _lastSeekAt >= syncSeekCooldown.inMilliseconds) {
           _lastSeekAt = now;
           _settleUntil = now + syncSettleAfterSeek.inMilliseconds;
-          await local.seek(advice.seekTo!);
+          _fire(local.seek(advice.seekTo!));
         }
       } else if ((advice.speed - _appliedSpeed).abs() > 0.002) {
         _appliedSpeed = advice.speed;
-        await local.setSpeed(advice.speed);
+        _fire(local.setSpeed(advice.speed));
       }
     }
 
@@ -652,6 +651,13 @@ class PlaybackSyncController extends Notifier<PlaybackSyncState> {
     } catch (_) {
       _hostGone();
     }
+  }
+
+  /// Runs a player call without waiting for it, and without letting a failure
+  /// escape as an unhandled error. Every call here is a request, not a step
+  /// whose result the next line depends on.
+  void _fire(Future<void> future) {
+    unawaited(future.catchError((Object _) {}));
   }
 
   /// Dismisses the error line once the user has read it.
