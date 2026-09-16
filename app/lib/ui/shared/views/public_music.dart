@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/preferences_store.dart';
-import '../../l10n/l10n.dart';
-import '../../state/track_cache_controller.dart';
+import '../../../data/preferences_store.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/track_cache_controller.dart';
 
 /// Explains why the cache can only move into the system `Music/` folder after
 /// the user flips a switch on a *system settings* screen (Android 11+ calls

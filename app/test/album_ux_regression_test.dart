@@ -17,8 +17,8 @@ import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
 import 'package:khinsider/ui/album/views/album_screen.dart';
 import 'package:khinsider/ui/album/views/related_albums.dart';
-import 'package:khinsider/ui/now_playing/now_playing_art.dart';
-import 'package:khinsider/ui/search/search_screen.dart';
+import 'package:khinsider/ui/now_playing/views/now_playing_art.dart';
+import 'package:khinsider/ui/search/views/search_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart' show FakeAudioPlayer, longTitleAlbum;

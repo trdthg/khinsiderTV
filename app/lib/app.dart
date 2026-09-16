@@ -7,13 +7,13 @@ import 'l10n/generated/app_localizations.dart';
 import 'l10n/l10n.dart';
 import 'core/widgets/keep_screen_awake.dart';
 import 'core/theme.dart';
-import 'ui/shared/public_music.dart';
+import 'ui/shared/views/public_music.dart';
 import 'state/locale_controller.dart';
 import 'state/theme_controller.dart';
 import 'state/lan_controller.dart';
 import 'ui/album/views/album_screen.dart';
-import 'ui/search/search_screen.dart';
-import 'ui/settings/settings_screen.dart';
+import 'ui/search/views/search_screen.dart';
+import 'ui/settings/views/settings_screen.dart';
 
 /// Shared with [GlobalMediaKeys], which sits above the navigator and can
 /// therefore not look it up with `Navigator.of`.

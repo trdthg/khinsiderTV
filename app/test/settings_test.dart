@@ -12,8 +12,8 @@ import 'package:khinsider/data/update_service.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/track_cache_controller.dart';
 import 'package:khinsider/state/update_controller.dart';
-import 'package:khinsider/ui/settings/cache_screen.dart';
-import 'package:khinsider/ui/settings/settings_screen.dart';
+import 'package:khinsider/ui/settings/views/cache_screen.dart';
+import 'package:khinsider/ui/settings/views/settings_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 /// Never touches the network: fills the state the test wants and counts what

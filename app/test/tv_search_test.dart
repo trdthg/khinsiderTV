@@ -5,8 +5,8 @@ import 'package:khinsider/core/platform/device.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
 import 'package:khinsider/state/update_controller.dart';
-import 'package:khinsider/ui/search/search_screen.dart';
-import 'package:khinsider/ui/search/tv_system_text_field.dart';
+import 'package:khinsider/ui/search/views/search_screen.dart';
+import 'package:khinsider/ui/search/views/tv_system_text_field.dart';
 
 /// Records what the screen asks for, so a search can be asserted without a
 /// network call.

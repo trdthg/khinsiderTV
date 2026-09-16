@@ -7,8 +7,8 @@ import 'package:khinsider/core/widgets/dpad_tile.dart';
 import 'package:khinsider/data/update_service.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/update_controller.dart';
-import 'package:khinsider/ui/settings/settings_screen.dart';
-import 'package:khinsider/ui/settings/settings_widgets.dart';
+import 'package:khinsider/ui/settings/views/settings_screen.dart';
+import 'package:khinsider/ui/settings/views/settings_widgets.dart';
 
 /// A controller whose state the test moves by hand, so a rebuild can be
 /// triggered without a network, a timer or a new widget tree.

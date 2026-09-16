@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/widgets/dpad_tile.dart';
-import '../../l10n/l10n.dart';
+import '../../../core/widgets/dpad_tile.dart';
+import '../../../l10n/l10n.dart';
 
 /// A titled group of [SettingsRow]s, drawn as one rounded card.
 class SettingsSection extends StatelessWidget {

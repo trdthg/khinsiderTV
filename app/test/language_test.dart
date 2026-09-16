@@ -5,7 +5,7 @@ import 'package:khinsider/core/platform/device.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/locale_controller.dart';
 import 'package:khinsider/state/update_controller.dart';
-import 'package:khinsider/ui/settings/settings_screen.dart';
+import 'package:khinsider/ui/settings/views/settings_screen.dart';
 
 /// The update section must not reach for the network in a language test.
 class _IdleUpdateController extends UpdateController {

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/search_controller.dart' as kh;
-import 'package:khinsider/ui/search/search_screen.dart';
+import 'package:khinsider/ui/search/views/search_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 class SeededSearchController extends kh.SearchController {

@@ -6,8 +6,8 @@ import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/ui/album/views/album_screen.dart';
-import 'package:khinsider/ui/now_playing/now_playing_art.dart';
-import 'package:khinsider/ui/search/search_screen.dart';
+import 'package:khinsider/ui/now_playing/views/now_playing_art.dart';
+import 'package:khinsider/ui/search/views/search_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart'

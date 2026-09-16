@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/platform/device.dart';
-import '../../data/lan/lan_device.dart';
-import '../../data/preferences_store.dart';
-import '../../l10n/l10n.dart';
-import '../../state/lan_controller.dart';
-import '../../state/playback_sync_controller.dart';
-import '../search/tv_system_text_field.dart';
+import '../../../core/platform/device.dart';
+import '../../../data/lan/lan_device.dart';
+import '../../../data/preferences_store.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/lan_controller.dart';
+import '../../../state/playback_sync_controller.dart';
+import '../../search/views/tv_system_text_field.dart';
 import 'settings_widgets.dart';
 
 /// Cross-device sync over the local network: which devices are around, and

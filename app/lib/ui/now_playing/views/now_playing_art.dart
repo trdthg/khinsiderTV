@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/player_controller.dart';
+import '../../../state/player_controller.dart';
 
 /// Self-contained animated album art: floating cover with a breathing glow
 /// and a vinyl disc that slides out behind it while playing.

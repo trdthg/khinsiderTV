@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Whether this device is a television (Android TV / Google TV / Fire TV).
 ///
 /// Only the TV layouts differ: they type with the app's own on-screen keyboard
-/// instead of the system IME (see `lib/ui/search/tv_keyboard.dart`). Every
+/// instead of the system IME (see `lib/ui/search/views/tv_keyboard.dart`). Every
 /// other platform serves `false`, i.e. the pre-existing behaviour.
 ///
 /// The value is resolved once, before the first frame, in `main.dart` — a

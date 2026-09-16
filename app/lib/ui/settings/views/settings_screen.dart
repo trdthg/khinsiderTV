@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../l10n/generated/app_localizations.dart';
-import '../../l10n/l10n.dart';
-import '../../state/locale_controller.dart';
-import '../../state/update_controller.dart';
-import '../../data/update_service.dart';
+import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/locale_controller.dart';
+import '../../../state/update_controller.dart';
+import '../../../data/update_service.dart';
 import 'cache_screen.dart';
 import 'lan_screen.dart';
 import 'settings_widgets.dart';

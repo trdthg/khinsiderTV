@@ -4,14 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
-import '../../core/platform/device.dart';
-import '../../core/widgets/dpad_tile.dart';
-import '../../core/widgets/dpad_nav.dart';
-import '../../data/preferences_store.dart';
-import '../../l10n/l10n.dart';
-import '../../state/search_controller.dart';
-import '../../state/update_controller.dart';
-import '../settings/settings_screen.dart';
+import '../../../core/platform/device.dart';
+import '../../../core/widgets/dpad_tile.dart';
+import '../../../core/widgets/dpad_nav.dart';
+import '../../../data/preferences_store.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/search_controller.dart';
+import '../../../state/update_controller.dart';
+import '../../settings/views/settings_screen.dart';
 import 'tv_system_text_field.dart';
 
 /// Search screen: text field + responsive album grid (list on narrow /

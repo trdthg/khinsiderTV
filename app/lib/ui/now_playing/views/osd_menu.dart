@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
-import '../../core/theme.dart';
-import '../../core/widgets/dpad_tile.dart';
-import '../../core/widgets/seek_bar.dart';
-import '../../l10n/l10n.dart';
-import '../../state/player_controller.dart';
-import '../../state/theme_controller.dart';
+import '../../../core/theme.dart';
+import '../../../core/widgets/dpad_tile.dart';
+import '../../../core/widgets/seek_bar.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/player_controller.dart';
+import '../../../state/theme_controller.dart';
 
 /// Modal OSD menu overlay: seek, play/pause, skip, audio quality, theme.
 /// Keyboard focus is trapped inside (the screen disables background focus).

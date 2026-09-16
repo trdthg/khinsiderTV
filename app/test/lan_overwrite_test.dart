@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/data/lan/lan_device.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/lan_controller.dart';
-import 'package:khinsider/ui/settings/lan_screen.dart';
+import 'package:khinsider/ui/settings/views/lan_screen.dart';
 
 /// The forced (overwrite) sync is the only destructive thing this app can do to
 /// a favorites list, so the two-tap confirmation is worth a test of its own.
