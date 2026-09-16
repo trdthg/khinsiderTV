@@ -1172,3 +1172,25 @@
 - [x] 同一首歌却差几万 ms，只可能是两种情况之一：**主机的目标位置算错了**（时钟差/采样），或**本机读到的位置是错的**。
       单看一个「偏差」数字无法区分，所以跟随状态行下面现在直接显示两边位置：**「主机 X 秒，本机 Y 秒」**。
 - [x] 下一次反馈只需念这三个数（偏差 / 主机 / 本机），就能直接定位是哪一侧的问题，不必再猜。
+
+## AL. 未发布（v0.3.14）：Windows 上缓存永远完不成（只有 .part）
+
+用户实测（Windows）：「完整播完一首后，文件夹里还是只有 .part，一个 .mp3 都没有」。
+
+- [x] **结论**：缓存完全依赖 just_audio 的 `LockCachingAudioSource`（`lib/audio/just_audio_player_impl.dart:55`），
+      它的收尾是「边播边写 `<曲名>.mp3.part`，整首下完后改名成 `<曲名>.mp3`」。在 Windows 上这一步**从不发生**
+      —— 与「是否完整播放」无关（用户已按最短曲目完整播完验证过），所以是上游在 Windows 上的收尾失败
+      （最可能是改名时句柄仍未释放：Windows 不允许重命名打开中的文件，POSIX 允许）。
+- [x] **连带后果**：`AudioCacheManager._readStatusSync` 只用 `part.existsSync()` 判断下载中
+      （`audio_cache_manager.dart:510`），于是残留 `.part` = 永远「下载中」→ 专辑页每行永远转圈
+      （`album_track_list.dart` 的 `_CacheBadge`：`state.downloading` → `CircularProgressIndicator`）。
+      同时这些 `.part` 只占磁盘、永远不会被清理。
+- [ ] **待做（下一版核心工作）**：自己实现收尾，不再依赖上游 ——
+      1. `AudioCacheManager.downloadTrackSource(url, file)`：`HttpClient` GET → 写 `<file>.khpart`
+         （**必须换后缀**，避免与 just_audio 自己的 `.part` 混淆）→ **关闭 sink** → `rename` 到 `<file>`，失败重试；
+      2. 播放时若成品文件已存在则直接用（现在的 `_cachedUriFor` 已经是这个方向）；
+      3. `_readStatusSync`：`.part`/`.khpart` 存在但**不在活跃下载列表里** → 记为「未完成」而不是「下载中」，
+         徽标显示「未完成 · 重新下载」并可点击重下，不再转圈；
+      4. 设置里加「清理未完成的缓存」（删掉所有残留 `.part`/`.khpart`）。
+- [x] 用户当前可用的临时办法：`del /s /q "音乐目录\*.part"`（只是没下完的临时文件，删掉不损失成品）。
+

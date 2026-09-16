@@ -73,7 +73,7 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 | 全屏播放时 `descendantsAreFocusable: false` | OSD 菜单模态化，焦点无法逃逸到背景列表 |
 | 点击/悬停同时 `requestFocus()` | 鼠标/键盘行为一致（否则 Enter 永远激活 autofocus 行） |
 | 页面级 `Focus(autofocus: true)` 兜底 | 什么都不聚焦时按键从 route 的 focus scope 冒泡，页面内的 `onKeyEvent` 收不到；本节点持有焦点才能接住 Esc |
-| 缓存状态同步扫描（stat） | 每行 1–2 次 stat，不等 event loop，UI 不会卡；下载期间才用 1.2s 定时器轮询 |
+| 缓存状态同步扫描（stat） | 每行 1–2 次 stat，不等 event loop，UI 不会卡；下载期间才用 1.2s 定时器轮询。**收尾不能依赖上游**：`LockCachingAudioSource` 在 Windows 上从没把 `.part` 改名成成品（实测完整播完也没有），所以缓存下载要自己写（HttpClient → `.khpart` → 关闭句柄 → 带重试的 rename），并且**判断「下载中」不能只看 `.part` 是否存在**（否则残留临时文件 = 永远转圈） |
 | 媒体键挂在 root 最低优先级 | 任意页面全局生效，且不与深层快捷键冲突 |
 | 系统媒体命令（通知栏/锁屏/耳机键）经 `SystemMediaCommandHandler` 回到 `PlayerController` | 队列只有「当前 + 预取的下一首」，系统按下一首时若预取还没完成，直接透传给 impl 就是静默 no-op；走 controller 才能按需解析下一首 |
 | 媒体会话（`KhinsiderAudioHandler`）**不是** `BaseAudioPlayer`，播放一律走 `audioPlayerProvider` | 会话的 `play/pause/stop` 是**系统**入口，内部会转交回 `PlayerController`；若 controller 又拿同一个对象播放，`pause()` → `handler.pause()` → `controller.pause()` 会无限同步递归（实测把 isolate 卡死，而通知栏进度条因为系统自行推算仍在走，看起来「还在播」）。所以两件事拆成两个真实对象：`BaseAudioPlayer`（播放，`audioPlayerProvider`）与 `MediaSession`（接收系统命令 + `endSession()`，`mediaSessionProvider`） |
