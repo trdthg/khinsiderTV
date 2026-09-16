@@ -359,7 +359,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get cacheDownloading => '下载中';
+  String get cacheDownloading => '正在下载到 Music/KHInsider…';
 
   @override
   String cacheDeleteAlbum(String album) {
@@ -876,5 +876,30 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String syncPositions(String host, String local) {
     return '主机 $host 秒，本机 $local 秒';
+  }
+
+  @override
+  String get cacheNotCached => '尚未缓存 —— 直接在线播放';
+
+  @override
+  String get cacheIncomplete => '有一个被中断的下载留下了临时文件（设置 → 缓存 里可以清理）';
+
+  @override
+  String cacheCached(String size) {
+    return '已缓存到 Music/KHInsider$size';
+  }
+
+  @override
+  String get cacheCleanIncomplete => '清理未完成的下载';
+
+  @override
+  String get cacheCleanIncompleteSubtitle => '删掉那些被中断、永远没下完的临时文件';
+
+  @override
+  String get cacheCleaning => '正在清理…';
+
+  @override
+  String cacheCleanedIncomplete(int count) {
+    return '已清理 $count 个临时文件';
   }
 }

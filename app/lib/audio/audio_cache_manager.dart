@@ -68,6 +68,17 @@ class AudioCacheManager {
   /// Namespace folder inside the user's Music directory.
   static const String appFolderName = 'KHInsider';
 
+  /// Suffix of the file *this* class writes while downloading. Deliberately
+  /// different from just_audio's `.part`, so the two can never be confused.
+  static const String tempSuffix = '.khpart';
+
+  /// A temporary file that has not been written to for this long is a leftover
+  /// from a download that died, not one that is running.
+  static const Duration staleTempAfter = Duration(minutes: 2);
+
+  /// Target paths this class is downloading right now.
+  final Set<String> _activeDownloads = {};
+
   /// Media category folders inside an album folder.
   static const String mp3Folder = 'mp3';
   static const String flacFolder = 'flac';
@@ -507,9 +518,119 @@ class AudioCacheManager {
         if (length > 0) bytes = length;
       } catch (_) {}
     }
-    final downloading = part.existsSync();
-    if (bytes == null && !downloading) return TrackCacheStatus.absent;
-    return TrackCacheStatus(bytes: bytes, downloading: downloading);
+    var downloading = false;
+    var incomplete = false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final ours = File('${file.path}$tempSuffix');
+    for (final temp in [part, ours]) {
+      if (!temp.existsSync()) continue;
+      if (_activeDownloads.contains(file.path)) {
+        downloading = true;
+        continue;
+      }
+      // Age, not mere existence: a leftover file from a killed download used to
+      // mean "downloading" forever.
+      int age;
+      try {
+        age = now - temp.statSync().modified.millisecondsSinceEpoch;
+      } catch (_) {
+        continue;
+      }
+      if (age < staleTempAfter.inMilliseconds) {
+        downloading = true;
+      } else {
+        incomplete = true;
+      }
+    }
+    if (bytes == null && !downloading && !incomplete) {
+      return TrackCacheStatus.absent;
+    }
+    return TrackCacheStatus(
+      bytes: bytes,
+      downloading: downloading,
+      incomplete: incomplete,
+    );
+  }
+
+  /// Downloads [url] into [target] ourselves, and returns whether [target] is a
+  /// complete file afterwards.
+  ///
+  /// This does not go through just_audio's caching source on purpose. That one
+  /// appends to `<file>.part` and renames it when the download finishes — and on
+  /// Windows that rename never happens, even for a track played end to end, so
+  /// a cache folder could fill up with `.part` files and never hold one single
+  /// finished track. Here the write goes to `<file>.khpart`, the handle is
+  /// closed, and only then is it renamed, with retries: Windows refuses to
+  /// rename a file that anything still has open, and giving it a moment is
+  /// usually enough.
+  Future<bool> downloadTrackSource(String url, File target) async {
+    try {
+      if (target.existsSync() && target.lengthSync() > 0) return true;
+    } catch (_) {}
+    final temp = File('${target.path}$tempSuffix');
+    _activeDownloads.add(target.path);
+    final client = HttpClient();
+    IOSink? sink;
+    var renamed = false;
+    try {
+      final request = await client.getUrl(Uri.parse(url));
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) return false;
+      sink = temp.openWrite();
+      await response.pipe(sink);
+      // pipe closes the sink; make sure the handle is really gone before the
+      // rename, which is the step that has been failing.
+      sink = null;
+      for (var attempt = 0; attempt < 5 && !renamed; attempt++) {
+        try {
+          await temp.rename(target.path);
+          renamed = true;
+        } on FileSystemException {
+          await Future<void>.delayed(
+            Duration(milliseconds: 200 * (attempt + 1)),
+          );
+        }
+      }
+      return renamed;
+    } catch (_) {
+      return false;
+    } finally {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      if (!renamed) {
+        try {
+          if (temp.existsSync()) temp.deleteSync();
+        } catch (_) {}
+      }
+      _activeDownloads.remove(target.path);
+      client.close(force: true);
+    }
+  }
+
+  /// Deletes leftover temporary files under the cache root and reports how many
+  /// went. Files still being written to are left alone, so this is safe to run
+  /// while something is playing.
+  Future<int> cleanIncomplete() async {
+    final dir = await root();
+    if (!dir.existsSync()) return 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var removed = 0;
+    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      if (!entity.path.endsWith('.part') && !entity.path.endsWith(tempSuffix)) {
+        continue;
+      }
+      try {
+        final age = now - entity.statSync().modified.millisecondsSinceEpoch;
+        if (age < staleTempAfter.inMilliseconds) continue;
+        entity.deleteSync();
+        removed++;
+      } catch (_) {
+        // Locked, or gone already: nothing to report.
+      }
+    }
+    return removed;
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -717,28 +838,39 @@ class CacheLookupKey {
 
 /// Whether a track is cached, still downloading, or absent.
 class TrackCacheStatus {
-  const TrackCacheStatus({this.bytes, this.downloading = false});
+  const TrackCacheStatus({
+    this.bytes,
+    this.downloading = false,
+    this.incomplete = false,
+  });
 
   static const TrackCacheStatus absent = TrackCacheStatus();
 
   /// Size of the completed file in bytes, null while it is not there yet.
   final int? bytes;
 
-  /// True while a partial download (`<file>.part`) is on disk.
+  /// True while a partial download (`<file>.part`) is on disk *and* moving.
   final bool downloading;
+
+  /// A temporary file is on disk but nothing is writing to it any more: a
+  /// download that was interrupted. Shown as "not finished" rather than as a
+  /// spinner that never stops — which is what a leftover `.part` used to look
+  /// like forever.
+  final bool incomplete;
 
   bool get cached => bytes != null;
 
-  bool get isEmpty => !cached && !downloading;
+  bool get isEmpty => !cached && !downloading && !incomplete;
 
   @override
   bool operator ==(Object other) =>
       other is TrackCacheStatus &&
       other.bytes == bytes &&
-      other.downloading == downloading;
+      other.downloading == downloading &&
+      other.incomplete == incomplete;
 
   @override
-  int get hashCode => Object.hash(bytes, downloading);
+  int get hashCode => Object.hash(bytes, downloading, incomplete);
 
   @override
   String toString() =>

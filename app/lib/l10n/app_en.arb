@@ -293,7 +293,7 @@
       }
     }
   },
-  "cacheDownloading": "Downloading",
+  "cacheDownloading": "Downloading to Music/KHInsider…",
   "cacheDeleteAlbum": "Delete the cache for {album}",
   "@cacheDeleteAlbum": {
     "placeholders": {
@@ -864,6 +864,27 @@
       },
       "local": {
         "type": "String"
+      }
+    }
+  },
+  "cacheNotCached": "Not cached yet — plays from the network",
+  "cacheIncomplete": "An interrupted download left a temporary file here (Settings → Cache can clean it)",
+  "cacheCached": "Cached in Music/KHInsider{size}",
+  "@cacheCached": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheCleanIncomplete": "Clean unfinished downloads",
+  "cacheCleanIncompleteSubtitle": "Deletes temporary files left by downloads that never finished",
+  "cacheCleaning": "Cleaning…",
+  "cacheCleanedIncomplete": "Removed {count} temporary files",
+  "@cacheCleanedIncomplete": {
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   }

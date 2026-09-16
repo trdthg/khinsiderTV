@@ -52,6 +52,11 @@ class JustAudioPlayerImpl implements BaseAudioPlayer {
 
   Future<LockCachingAudioSource> _sourceFor(PlayableItem it) async {
     final file = await _cache.fileFor(it);
+    // Fetch it ourselves too, in the background. just_audio's caching source
+    // never renames its `.part` file into place on Windows — not even for a
+    // track played end to end — so relying on it alone leaves a cache folder
+    // that never holds one single finished track.
+    unawaited(_cache.downloadTrackSource(it.url, file));
     return LockCachingAudioSource(Uri.parse(it.url), cacheFile: file);
   }
 

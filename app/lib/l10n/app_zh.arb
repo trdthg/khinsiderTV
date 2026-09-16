@@ -293,7 +293,7 @@
       }
     }
   },
-  "cacheDownloading": "下载中",
+  "cacheDownloading": "正在下载到 Music/KHInsider…",
   "cacheDeleteAlbum": "删除《{album}》的缓存",
   "@cacheDeleteAlbum": {
     "placeholders": {
@@ -864,6 +864,27 @@
       },
       "local": {
         "type": "String"
+      }
+    }
+  },
+  "cacheNotCached": "尚未缓存 —— 直接在线播放",
+  "cacheIncomplete": "有一个被中断的下载留下了临时文件（设置 → 缓存 里可以清理）",
+  "cacheCached": "已缓存到 Music/KHInsider{size}",
+  "@cacheCached": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cacheCleanIncomplete": "清理未完成的下载",
+  "cacheCleanIncompleteSubtitle": "删掉那些被中断、永远没下完的临时文件",
+  "cacheCleaning": "正在清理…",
+  "cacheCleanedIncomplete": "已清理 {count} 个临时文件",
+  "@cacheCleanedIncomplete": {
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   }

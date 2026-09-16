@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 import '../../core/widgets/dpad_tile.dart';
+import '../../l10n/l10n.dart';
 import '../../state/player_controller.dart';
 import '../../state/track_cache_controller.dart';
 import 'related_albums.dart';
@@ -403,11 +404,14 @@ class _CacheBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final state = entry ?? TrackCacheEntry.empty;
+    final l = l10n(context);
     final text = state.isEmpty
-        ? 'Not cached yet — plays from the network'
+        ? l.cacheNotCached
         : state.downloading
-        ? 'Downloading to Music/KHInsider…'
-        : 'Cached in Music/KHInsider${_sizeSuffix(state)}';
+        ? l.cacheDownloading
+        : state.incomplete
+        ? l.cacheIncomplete
+        : l.cacheCached(_sizeSuffix(state));
     return Tooltip(
       message: text,
       waitDuration: const Duration(milliseconds: 350),
@@ -418,6 +422,15 @@ class _CacheBadge extends StatelessWidget {
                 Icons.cloud_outlined,
                 size: 18,
                 color: scheme.onSurface.withValues(alpha: 0.22),
+              )
+            : state.incomplete
+            // A leftover temporary file, not a download in flight: showing a
+            // spinner here meant "downloading" forever after one interrupted
+            // download.
+            ? Icon(
+                Icons.error_outline,
+                size: 18,
+                color: scheme.onSurface.withValues(alpha: 0.45),
               )
             : state.downloading
             ? const SizedBox(

@@ -81,6 +81,33 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
 
   Future<void> _clearImageCache() => _images.clear();
 
+  /// Deletes temporary files that no download is writing to any more. They are
+  /// the visible remains of downloads that were interrupted — on Windows they
+  /// could pile up without a single finished track, and the album list showed
+  /// each one as "downloading" forever.
+  Future<void> _cleanIncomplete() async {
+    final l = l10n(context);
+    setState(() {
+      _busy = true;
+      _status = l.cacheCleaning;
+    });
+    try {
+      final removed = await _cache.cleanIncomplete();
+      await _reload();
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = l.cacheCleanedIncomplete(removed);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = '$e';
+      });
+    }
+  }
+
   Future<void> _clearAll() async {
     final freed = _totalBytes;
     final l = l10n(context);
@@ -238,6 +265,12 @@ class _CacheScreenState extends ConsumerState<CacheScreen> {
                                 if (_imageBytes > 0)
                                   l.cacheImageUsage(formatBytes(_imageBytes)),
                               ].join(' · '),
+                            ),
+                            SettingsRow(
+                              icon: Icons.cleaning_services_outlined,
+                              title: l.cacheCleanIncomplete,
+                              subtitle: l.cacheCleanIncompleteSubtitle,
+                              onSelect: _busy ? null : _cleanIncomplete,
                             ),
                             SettingsRow(
                               icon: Icons.delete_sweep_outlined,

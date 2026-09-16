@@ -382,7 +382,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get cacheDownloading => 'Downloading';
+  String get cacheDownloading => 'Downloading to Music/KHInsider…';
 
   @override
   String cacheDeleteAlbum(String album) {
@@ -916,5 +916,32 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String syncPositions(String host, String local) {
     return 'Host at ${host}s, this device at ${local}s';
+  }
+
+  @override
+  String get cacheNotCached => 'Not cached yet — plays from the network';
+
+  @override
+  String get cacheIncomplete =>
+      'An interrupted download left a temporary file here (Settings → Cache can clean it)';
+
+  @override
+  String cacheCached(String size) {
+    return 'Cached in Music/KHInsider$size';
+  }
+
+  @override
+  String get cacheCleanIncomplete => 'Clean unfinished downloads';
+
+  @override
+  String get cacheCleanIncompleteSubtitle =>
+      'Deletes temporary files left by downloads that never finished';
+
+  @override
+  String get cacheCleaning => 'Cleaning…';
+
+  @override
+  String cacheCleanedIncomplete(int count) {
+    return 'Removed $count temporary files';
   }
 }

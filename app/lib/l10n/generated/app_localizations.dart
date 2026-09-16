@@ -695,7 +695,7 @@ abstract class AppLocalizations {
   /// No description provided for @cacheDownloading.
   ///
   /// In en, this message translates to:
-  /// **'Downloading'**
+  /// **'Downloading to Music/KHInsider…'**
   String get cacheDownloading;
 
   /// No description provided for @cacheDeleteAlbum.
@@ -1512,6 +1512,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Host at {host}s, this device at {local}s'**
   String syncPositions(String host, String local);
+
+  /// No description provided for @cacheNotCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Not cached yet — plays from the network'**
+  String get cacheNotCached;
+
+  /// No description provided for @cacheIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'An interrupted download left a temporary file here (Settings → Cache can clean it)'**
+  String get cacheIncomplete;
+
+  /// No description provided for @cacheCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached in Music/KHInsider{size}'**
+  String cacheCached(String size);
+
+  /// No description provided for @cacheCleanIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean unfinished downloads'**
+  String get cacheCleanIncomplete;
+
+  /// No description provided for @cacheCleanIncompleteSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletes temporary files left by downloads that never finished'**
+  String get cacheCleanIncompleteSubtitle;
+
+  /// No description provided for @cacheCleaning.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleaning…'**
+  String get cacheCleaning;
+
+  /// No description provided for @cacheCleanedIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {count} temporary files'**
+  String cacheCleanedIncomplete(int count);
 }
 
 class _AppLocalizationsDelegate

@@ -25,6 +25,7 @@ class TrackCacheEntry {
     this.mp3Bytes,
     this.losslessBytes,
     this.downloading = false,
+    this.incomplete = false,
   });
 
   static const TrackCacheEntry empty = TrackCacheEntry();
@@ -38,6 +39,10 @@ class TrackCacheEntry {
   /// True while a partial download is on disk.
   final bool downloading;
 
+  /// A temporary file is on disk that nothing is writing to any more: a
+  /// download that was interrupted, not one that is running.
+  final bool incomplete;
+
   bool get cached => mp3Bytes != null || losslessBytes != null;
 
   /// True when the lossless copy is on disk as well.
@@ -45,7 +50,7 @@ class TrackCacheEntry {
 
   int get bytes => (mp3Bytes ?? 0) + (losslessBytes ?? 0);
 
-  bool get isEmpty => !cached && !downloading;
+  bool get isEmpty => !cached && !downloading && !incomplete;
 
   @override
   bool operator ==(Object other) =>
@@ -195,12 +200,14 @@ class AlbumCacheController extends Notifier<AlbumCacheState> {
               mp3Bytes: entry.mp3Bytes,
               losslessBytes: status.bytes,
               downloading: entry.downloading || status.downloading,
+              incomplete: entry.incomplete || status.incomplete,
             );
           } else {
             entry = TrackCacheEntry(
               mp3Bytes: status.bytes,
               losslessBytes: entry.losslessBytes,
               downloading: entry.downloading || status.downloading,
+              incomplete: entry.incomplete || status.incomplete,
             );
           }
         }
