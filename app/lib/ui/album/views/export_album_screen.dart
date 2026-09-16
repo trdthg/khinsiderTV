@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
-import '../../audio/music_export.dart';
-import '../../l10n/l10n.dart';
-import '../../state/track_cache_controller.dart';
+import '../../../audio/music_export.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/track_cache_controller.dart';
 
 /// Copies an album's cached tracks into the system `Music/` folder and shows
 /// how far along it is.

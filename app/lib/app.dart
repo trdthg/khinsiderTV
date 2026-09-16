@@ -11,7 +11,7 @@ import 'ui/shared/public_music.dart';
 import 'state/locale_controller.dart';
 import 'state/theme_controller.dart';
 import 'state/lan_controller.dart';
-import 'ui/album/album_screen.dart';
+import 'ui/album/views/album_screen.dart';
 import 'ui/search/search_screen.dart';
 import 'ui/settings/settings_screen.dart';
 

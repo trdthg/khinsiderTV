@@ -8,7 +8,7 @@ import 'package:khinsider/audio/base_audio_player.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/player_controller.dart';
 import 'package:khinsider/data/khinsider_client.dart';
-import 'package:khinsider/ui/album/album_screen.dart';
+import 'package:khinsider/ui/album/views/album_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
 import 'album_layout_test.dart' show FakeAudioPlayer, longTitleAlbum;

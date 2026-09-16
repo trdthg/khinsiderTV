@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
-import '../../core/widgets/dpad_tile.dart';
-import '../../l10n/l10n.dart';
-import '../../state/player_controller.dart';
-import '../../state/track_cache_controller.dart';
+import '../../../core/widgets/dpad_tile.dart';
+import '../../../l10n/l10n.dart';
+import '../../../state/player_controller.dart';
+import '../../../state/track_cache_controller.dart';
 import 'related_albums.dart';
 
 /// The unified track list, shared by the normal album layout and the zen

@@ -3,9 +3,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
-import '../../core/widgets/dpad_tile.dart';
-import '../../core/widgets/dpad_nav.dart';
-import '../../data/preferences_store.dart';
+import '../../../core/widgets/dpad_tile.dart';
+import '../../../core/widgets/dpad_nav.dart';
+import '../../../data/preferences_store.dart';
 
 /// "People who viewed this also viewed" — horizontally scrolling grid with
 /// two rows, shown at the bottom of the album screen.

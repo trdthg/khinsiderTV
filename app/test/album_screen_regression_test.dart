@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:khinsider/l10n/generated/app_localizations.dart';
 import 'package:khinsider/state/album_controller.dart';
 import 'package:khinsider/state/player_controller.dart';
-import 'package:khinsider/ui/album/album_screen.dart';
+import 'package:khinsider/ui/album/views/album_screen.dart';
 import 'package:khinsider/ui/search/search_screen.dart';
 import 'package:khinsider_api/khinsider_api.dart';
 
