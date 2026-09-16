@@ -189,3 +189,37 @@ just_audio (LockCachingAudioSource: 边下边播, 断点续传)
 * 页面缓存仍在 `Application Support/api_cache/`（HTML 不适合给用户看）。
 * `HttpCache.clear()` 与 `AudioCacheManager.clear()/totalSize()/deleteAlbum()` 预留设置页入口。
 * 首次播放一张新专辑的速度下限 = 网络 RTT（曲目页 + CDN 起播缓冲），之后同专辑内所有操作都是即时的
+
+## 分层规范（对齐 flutter/agent-plugins 的架构技能）
+
+规范来源：`flutter/agent-plugins` 的 `flutter-apply-architecture-best-practices` 技能
+（已安装到 `~/.dsh/skills/`）。本仓库**采纳它的分层与目录约定**，但**有意保留两处不同**，
+理由见下表 —— 不是为了字面一致去换掉已经稳定运转的机制。
+
+### 层映射
+
+| 规范里的层 | 本仓库的位置 | 说明 |
+|---|---|---|
+| UI · Views | `lib/ui/**`、`lib/core/widgets/**` | 只做渲染、动画、布局、路由；**不取数据、不算业务** |
+| UI · ViewModels | `lib/state/**` | Riverpod `Notifier`，等价于规范的 `ChangeNotifier` ViewModel：持有状态快照 + 命令方法 |
+| UI · DI | Riverpod `Provider` / `ref` | 等价于规范的 `provider` / `get_it` 容器 |
+| Data · Services | `packages/khinsider_api/**` | 无状态，只负责与站点/接口通信，返回原始模型 |
+| Data · Repositories | `lib/data/**`（含 `lan/`、HTTP 缓存）+ 少数 `lib/state/*_controller` | 缓存、离线、重试、把原始模型转成界面要用的模型 |
+| Data · 本地存储/平台 | `lib/audio/**`、`lib/platform/**` | 播放器、缓存目录、Android 存储权限等平台包装 |
+| Logic · Use Cases | **不设** | 规范里是可选的；本仓库没有跨多个 ViewModel 复用的复杂业务逻辑 |
+
+### 有意偏离（写下来是为了以后不要再纠结）
+
+1. **ViewModel 用 Riverpod `Notifier`，不用 `ChangeNotifier`。**
+   职责完全一致（不可变状态快照 + 命令方法 + 通知刷新），而 Riverpod 同时兼做 DI，
+   少一层 `provider` 注册；换成 `ChangeNotifier` 属于全库重写，对用户零收益。
+2. **模型手写，不用 `freezed` / `built_value`。**
+   避免代码生成进入构建链路（CI 是 9 个平台矩阵），手写不可变模型已经够用。
+
+### 新代码的写法（强制）
+
+- 新功能按 `lib/ui/<feature>/{views/,view_models/}` 组织；**已有目录逐步搬迁，不搞一次性大搬迁**；
+- View 里不出现网络/磁盘调用，数据只从 ViewModel 拿；
+- 数据访问只写在 Repository，View 不直接碰 `packages/khinsider_api` 或 `HttpClient`；
+- 开发流程沿用规范那 8 步（模型 → Service → Repository →［可选 Use Case］→ ViewModel → View → 注入 → 跑测试）。
+
