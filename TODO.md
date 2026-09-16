@@ -1208,3 +1208,21 @@
 - [x] 设置 → 缓存：新增「清理未完成的下载」（，只删 2 分钟没动过的，正在下载的不动）。
 - [x] 测试  4 条：自己下载会得到真正的成品且不留临时文件；失败不留半成品；
       已完成的不会重复下载；清理只删陈旧残留、保留正在下载的。
+
+## AL. 已发布（v0.3.14）：Windows 上缓存永远完不成 —— 自己收尾
+
+实测确认：完整播完一首也不生成 .mp3，所以是上游收尾失败（不是没下完）。
+
+- [x] 新增 `AudioCacheManager.downloadTrackSource(url, target)`：自己发请求 → 写 `<file>.khpart`
+      （**换后缀**，不与 just_audio 的 `.part` 混淆）→ **关闭句柄** → rename 到成品，失败重试 5 次
+      （Windows 不允许重命名打开中的文件）。
+- [x] 播放时并行调用它（`JustAudioPlayerImpl._sourceFor`）：播放仍走 LockCachingAudioSource，
+      另加一份自己收尾的下载，于是缓存里终于会出现真正的 `.mp3`。
+- [x] **残留临时文件不再等于「正在下载」**：按**修改时间**判断（`staleTempAfter = 2 分钟`），
+      2 分钟没动过就是中断残留，标记 `incomplete`；`TrackCacheStatus` / `TrackCacheEntry` 都加了该状态，
+      `isEmpty` 同步修正（否则这种条目会被整条丢掉、显示成「未缓存」）。
+- [x] 专辑页徽标：`incomplete` 显示「有被中断的下载留下的临时文件」，**不再永远转圈**。
+- [x] 设置 → 缓存：新增「清理未完成的下载」（`cleanIncomplete()`：只删 2 分钟没动过的，正在下载的不动）。
+- [x] 测试 `test/cache_download_test.dart` 4 条：自己下载得到成品且不留临时文件；失败不留半成品；
+      已完成的不重复下载；清理只删陈旧残留、保留正在下载的。
+
